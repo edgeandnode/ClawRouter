@@ -39,6 +39,25 @@ openclaw config set model blockrun/auto
 | **Graceful fallback** | When one provider rate-limits, auto-switches to another. No silent failures |
 | **Usage analytics** | Know exactly where every dollar goes — by model, by day, by conversation |
 
+## Why BlockRun (vs OpenRouter, LiteLLM, etc.)
+
+OpenRouter and LiteLLM are built for developers — you create an account, get an API key, prepay a balance, and manage it through a dashboard.
+
+BlockRun is built for **agents**. The difference matters:
+
+| | OpenRouter / LiteLLM | BlockRun |
+|---|---|---|
+| **Onboarding** | Human creates account, gets API key | Agent generates wallet on first run |
+| **Payment** | Prepaid balance (custodial) | Per-request micropayment (non-custodial) |
+| **Auth** | API key (shared secret) | Wallet signature (cryptographic proof) |
+| **Custody** | Provider holds your money | USDC stays in YOUR wallet until spent |
+| **Spend control** | Dashboard limits | On-chain balance + server-side budgets |
+| **Smart routing** | Proprietary / closed | Open-source (RouteLLM-based) |
+
+The thesis: as AI agents become autonomous, they need financial infrastructure designed for machines, not humans. An agent shouldn't need a human to sign up for OpenRouter and paste an API key. It should generate a wallet, receive USDC, and pay per request — all programmatically.
+
+BlockRun is the payment layer agents use when they need to call LLMs.
+
 ## How It Works
 
 ```
@@ -51,7 +70,8 @@ openclaw config set model blockrun/auto
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  @blockrun/openclaw provider plugin                       │  │
 │  │  • Intercepts LLM requests                                │  │
-│  │  • Forwards to BlockRun API                               │  │
+│  │  • Smart routing: classifies query, picks cheapest model  │  │
+│  │  • Forwards to BlockRun API with selected model           │  │
 │  │  • Handles x402 micropayment                               │  │
 │  │  • Streams response back                                  │  │
 │  └───────────────────────────────────────────────────────────┘  │
@@ -62,20 +82,21 @@ openclaw config set model blockrun/auto
 │                     BlockRun API                                │
 │                                                                 │
 │  1. Verify x402 payment                                         │
-│  2. Smart routing: pick cheapest capable model                  │
-│  3. Enforce spend limits                                        │
-│  4. Forward to provider (OpenAI, Anthropic, Google, etc.)       │
-│  5. Stream response back                                        │
-│  6. Log usage + cost                                            │
+│  2. Enforce spend limits                                        │
+│  3. Forward to provider (OpenAI, Anthropic, Google, etc.)       │
+│  4. Stream response back                                        │
+│  5. Log usage + cost                                            │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 The plugin runs a local proxy between OpenClaw's LLM engine (pi-ai) and BlockRun's API. Pi-ai sees a standard OpenAI-compatible endpoint at `localhost`. It doesn't know about routing, payments, or spend limits — that's all handled transparently.
 
+Smart routing runs **client-side in the plugin** (open-source, inspectable), not server-side behind a black box. The plugin classifies each query, picks the cheapest capable model, and sends the request to BlockRun API with that specific model. The per-model price is transparent in the x402 402 response — you see exactly what you're paying before your wallet signs.
+
 ## Smart Routing
 
-When model is set to `blockrun/auto`, BlockRun analyzes each request and routes to the cheapest model that can handle it:
+When model is set to `blockrun/auto`, the plugin classifies each request **client-side** and routes to the cheapest model that can handle it:
 
 ```
 Simple query ("What's 2+2?")
@@ -89,6 +110,56 @@ Complex query ("Write a React component with tests")
 
 Reasoning task ("Prove this theorem")
   → o3 or gemini-2.5-pro ($1.25-2.00/$8-10 per M tokens)
+```
+
+### How It Routes
+
+The plugin uses a **hybrid rules-first approach** — heuristic rules handle 70-80% of requests in < 1ms with zero cost. Only ambiguous cases fall through to a cheap LLM classifier.
+
+```
+Request → Rule-based scorer (< 1ms, free)
+            ├── Clear classification → pick model → done
+            └── Ambiguous (score 1-2) → LLM classifier (~200ms, ~$0.00003)
+                                          └── classification → pick model → done
+```
+
+**Rule-based scorer** checks: token count, code presence (backticks, `function`, `class`), reasoning markers ("prove", "step by step"), technical terms, question count, and length. Each dimension adds/subtracts from a score that maps to a tier.
+
+**LLM classifier** sends a truncated prompt (first 500 chars) to `gemini-2.5-flash` with `max_tokens: 10` and asks for one word: SIMPLE, MEDIUM, COMPLEX, or REASONING. Cost per classification: ~$0.00003.
+
+Every routed request includes metadata:
+
+```
+[BlockRun] Routed to deepseek-chat (MEDIUM, confidence: 0.85)
+           Cost: $0.0004 | Baseline: $0.0095 | Saved: 95.8%
+```
+
+### Estimated Savings
+
+| Tier | % of Queries | Output Cost (per M) | vs Always GPT-4o ($10/M) |
+|------|-------------|---------------------|--------------------------|
+| SIMPLE | 40% | $0.60 | **94% savings** |
+| MEDIUM | 30% | $0.42 | **96% savings** |
+| COMPLEX | 20% | $15.00 | 50% more (but better quality) |
+| REASONING | 10% | $8.00 | **20% savings** |
+| **Weighted avg** | | **$3.67/M** | **63% savings** |
+
+### Customization
+
+All routing parameters live in `routing_config.json` — operators customize without code changes:
+
+```yaml
+# openclaw.yaml
+plugins:
+  - id: "@blockrun/openclaw"
+    config:
+      model: "blockrun/auto"
+      routing:
+        tiers:
+          COMPLEX:
+            primary: "openai/gpt-4o"    # Override default model
+        scoring:
+          reasoningKeywords: ["proof", "theorem", "formal verification"]
 ```
 
 Operators can also pin a specific model (`openclaw config set model openai/gpt-4o`) and still get spend controls + analytics.
@@ -236,23 +307,30 @@ Full list: 30+ models across 5 providers. See `src/models.ts`.
 
 ### Plugin (Open Source)
 
-The OpenClaw provider plugin. Runs a local HTTP proxy that sits between pi-ai and BlockRun's API.
+The OpenClaw provider plugin. Runs a local HTTP proxy with client-side smart routing between pi-ai and BlockRun's API.
 
 ```
 src/
-├── index.ts      # Plugin entry — register() and activate() lifecycle
-├── provider.ts   # Registers "blockrun" provider in OpenClaw
-├── proxy.ts      # Local HTTP proxy with x402 payment handling
-├── models.ts     # Model definitions and pricing
-├── auth.ts       # Wallet auto-generation, keystore, and key resolution
-└── types.ts      # Type definitions
+├── index.ts              # Plugin entry — register() and activate() lifecycle
+├── provider.ts           # Registers "blockrun" provider in OpenClaw
+├── proxy.ts              # Local HTTP proxy with x402 payment handling
+├── models.ts             # Model definitions and pricing
+├── auth.ts               # Wallet auto-generation, keystore, and key resolution
+├── types.ts              # Type definitions
+├── router/
+│   ├── index.ts          # Router entry — classify() and route()
+│   ├── rules.ts          # Rule-based classifier (heuristic scoring)
+│   ├── llm-classifier.ts # LLM fallback classifier (gemini-flash)
+│   ├── selector.ts       # Tier → model selection + fallback chains
+│   └── types.ts          # RoutingDecision, Tier, ScoringResult
+└── routing_config.json   # Declarative routing config (all thresholds + model assignments)
 ```
 
-The plugin is intentionally thin — a proxy that handles payment and forwards requests. Smart routing and spend enforcement live server-side in the BlockRun API where they can't be bypassed.
+The plugin handles two things: **smart routing** (open-source, client-side, inspectable) and **x402 payment** (sign-per-request). Spend enforcement lives server-side in the BlockRun API where it can't be bypassed.
 
 ### BlockRun API (Closed Source)
 
-The backend that handles routing, billing, and provider forwarding. Already exists — this plugin connects to it.
+The backend that handles billing, spend enforcement, and provider forwarding. Already exists — this plugin connects to it.
 
 ```
 POST /api/v1/chat/completions    — OpenAI-compatible chat endpoint
@@ -300,10 +378,10 @@ npm run typecheck
 ## Roadmap
 
 - [x] Phase 1: Provider plugin — one wallet, 30+ models, x402 payment proxy
-- [ ] Phase 2: Smart routing — auto-select cheapest capable model
-- [ ] Phase 3: Spend controls — daily/monthly budgets, per-request limits
-- [ ] Phase 4: Usage analytics — cost tracking dashboard at blockrun.ai
-- [ ] Phase 5: Graceful fallback — auto-switch providers on rate limit
+- [ ] Phase 2: Smart routing — client-side hybrid classifier, 4-tier model selection, 63% cost savings
+- [ ] Phase 3: Graceful fallback — per-tier fallback chains, auto-switch on rate limit or provider error
+- [ ] Phase 4: Spend controls — daily/monthly budgets, per-request limits, server-side enforcement
+- [ ] Phase 5: Usage analytics — cost tracking dashboard at blockrun.ai
 - [ ] Phase 6: Community launch — npm publish, OpenClaw PR, awesome-list
 
 ## License

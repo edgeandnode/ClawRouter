@@ -23,61 +23,68 @@ import { startProxy } from "./proxy.js";
 import { resolveOrGenerateWalletKey } from "./auth.js";
 import type { RoutingConfig } from "./router/index.js";
 
+/**
+ * Start the x402 proxy in the background.
+ * Called from register() because OpenClaw's loader only invokes register(),
+ * treating activate() as an alias (def.register ?? def.activate).
+ */
+async function startProxyInBackground(api: OpenClawPluginApi): Promise<void> {
+  // Resolve wallet key: saved file → env var → auto-generate
+  const { key: walletKey, address, source } = await resolveOrGenerateWalletKey();
+
+  // Log wallet source
+  if (source === "generated") {
+    api.logger.info(`Generated new wallet: ${address}`);
+    api.logger.info(`Fund with USDC on Base to start using ClawRouter.`);
+  } else if (source === "saved") {
+    api.logger.info(`Using saved wallet: ${address}`);
+  } else {
+    api.logger.info(`Using wallet from BLOCKRUN_WALLET_KEY: ${address}`);
+  }
+
+  // Resolve routing config overrides from plugin config
+  const routingConfig = api.pluginConfig?.routing as Partial<RoutingConfig> | undefined;
+
+  const proxy = await startProxy({
+    walletKey,
+    routingConfig,
+    onReady: (port) => {
+      api.logger.info(`BlockRun x402 proxy listening on port ${port}`);
+    },
+    onError: (error) => {
+      api.logger.error(`BlockRun proxy error: ${error.message}`);
+    },
+    onRouted: (decision) => {
+      const cost = decision.costEstimate.toFixed(4);
+      const saved = (decision.savings * 100).toFixed(0);
+      api.logger.info(`${decision.model} $${cost} (saved ${saved}%)`);
+    },
+  });
+
+  setActiveProxy(proxy);
+  api.logger.info(`BlockRun provider active — ${proxy.baseUrl}/v1 (smart routing enabled)`);
+}
+
 const plugin: OpenClawPluginDefinition = {
   id: "clawrouter",
   name: "ClawRouter",
   description: "Smart LLM router — 30+ models, x402 micropayments, 78% cost savings",
-  version: "0.2.2",
+  version: "0.2.3",
 
   register(api: OpenClawPluginApi) {
-    // Register BlockRun as a provider
+    // Register BlockRun as a provider (sync — available immediately)
     api.registerProvider(blockrunProvider);
-
     api.logger.info("BlockRun provider registered (30+ models via x402)");
-  },
 
-  async activate(api: OpenClawPluginApi) {
-    // Resolve wallet key: saved file → env var → auto-generate
-    const { key: walletKey, address, source } = await resolveOrGenerateWalletKey();
-
-    // Log wallet source
-    if (source === "generated") {
-      api.logger.info(`Generated new wallet: ${address}`);
-      api.logger.info(`Fund with USDC on Base to start using ClawRouter.`);
-    } else if (source === "saved") {
-      api.logger.info(`Using saved wallet: ${address}`);
-    } else {
-      api.logger.info(`Using wallet from BLOCKRUN_WALLET_KEY: ${address}`);
-    }
-
-    // Resolve routing config overrides from plugin config
-    const routingConfig = api.pluginConfig?.routing as Partial<RoutingConfig> | undefined;
-
-    // Start the local x402 proxy
-    try {
-      const proxy = await startProxy({
-        walletKey,
-        routingConfig,
-        onReady: (port) => {
-          api.logger.info(`BlockRun x402 proxy listening on port ${port}`);
-        },
-        onError: (error) => {
-          api.logger.error(`BlockRun proxy error: ${error.message}`);
-        },
-        onRouted: (decision) => {
-          const cost = decision.costEstimate.toFixed(4);
-          const saved = (decision.savings * 100).toFixed(0);
-          api.logger.info(`${decision.model} $${cost} (saved ${saved}%)`);
-        },
-      });
-
-      setActiveProxy(proxy);
-      api.logger.info(`BlockRun provider active — ${proxy.baseUrl}/v1 (smart routing enabled)`);
-    } catch (err) {
+    // Start x402 proxy in background (fire-and-forget)
+    // OpenClaw only calls register(), not activate() — so all init goes here.
+    // The loader ignores async returns, but the proxy starts in the background
+    // and setActiveProxy() makes it available to the provider once ready.
+    startProxyInBackground(api).catch((err) => {
       api.logger.error(
         `Failed to start BlockRun proxy: ${err instanceof Error ? err.message : String(err)}`,
       );
-    }
+    });
   },
 };
 

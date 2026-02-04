@@ -7,7 +7,7 @@
 Route every request to the cheapest model that can handle it.
 One wallet, 30+ models, zero API keys.
 
-[![npm](https://img.shields.io/npm/v/claw-router.svg)](https://npmjs.com/package/claw-router)
+[![npm](https://img.shields.io/npm/v/@blockrun/clawrouter.svg)](https://npmjs.com/package/@blockrun/clawrouter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://typescriptlang.org)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](https://nodejs.org)
@@ -31,7 +31,7 @@ ClawRouter is a smart LLM router for [OpenClaw](https://github.com/openclaw/open
 
 ```bash
 # 1. Install — auto-generates a wallet on Base
-openclaw plugin install claw-router
+openclaw plugin install @blockrun/clawrouter
 
 # 2. Fund your wallet with USDC on Base (address printed on install)
 #    A few dollars is enough to start — each request costs fractions of a cent
@@ -165,7 +165,7 @@ Every routed request is logged as a JSON line:
 ```yaml
 # openclaw.yaml
 plugins:
-  - id: "claw-router"
+  - id: "@blockrun/clawrouter"
     config:
       routing:
         tiers:
@@ -227,7 +227,7 @@ BlockRun API → Provider (OpenAI, Anthropic, Google, DeepSeek, xAI)
 Use ClawRouter as a library without OpenClaw:
 
 ```typescript
-import { startProxy } from "claw-router";
+import { startProxy } from "@blockrun/clawrouter";
 
 const proxy = await startProxy({
   walletKey: process.env.BLOCKRUN_WALLET_KEY!,
@@ -254,7 +254,7 @@ await proxy.close();
 Or use the router directly:
 
 ```typescript
-import { route, DEFAULT_ROUTING_CONFIG } from "claw-router";
+import { route, DEFAULT_ROUTING_CONFIG } from "@blockrun/clawrouter";
 
 const decision = await route("Prove sqrt(2) is irrational", undefined, 4096, {
   config: DEFAULT_ROUTING_CONFIG,
@@ -278,8 +278,8 @@ console.log(decision);
 ## Development
 
 ```bash
-git clone https://github.com/blockrunai/claw-router.git
-cd claw-router
+git clone https://github.com/BlockRunAI/ClawRouter.git
+cd ClawRouter
 npm install
 npm run build        # Build with tsup
 npm run dev          # Watch mode

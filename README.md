@@ -23,13 +23,14 @@ One wallet, 30+ models, zero API keys.
 "Summarize this article"  → GPT-4o-mini     $0.60/M    saved 99%
 "Build a React component" → Claude Sonnet   $15.00/M   best balance
 "Prove this theorem"      → o3              $10.00/M   reasoning
+"Run 50 parallel searches"→ Kimi K2.5       $2.40/M    agentic swarm
 ```
 
 ## Why ClawRouter?
 
 - **100% local routing** — 14-dimension weighted scoring runs on your machine in <1ms
 - **Zero external calls** — no API calls for routing decisions, ever
-- **30+ models** — OpenAI, Anthropic, Google, DeepSeek, xAI through one wallet
+- **30+ models** — OpenAI, Anthropic, Google, DeepSeek, xAI, Moonshot through one wallet
 - **x402 micropayments** — pay per request with USDC on Base, no API keys
 - **Open source** — MIT licensed, fully inspectable routing logic
 
@@ -118,7 +119,7 @@ Compared to **$75/M** for Claude Opus = **96% savings** on a typical workload.
 
 ## Models
 
-30+ models across 5 providers, one wallet:
+30+ models across 6 providers, one wallet:
 
 | Model             | Input $/M | Output $/M | Context | Reasoning |
 | ----------------- | --------- | ---------- | ------- | :-------: |
@@ -141,8 +142,21 @@ Compared to **$75/M** for Claude Opus = **96% savings** on a typical workload.
 | **xAI**           |           |            |         |           |
 | grok-3            | $3.00     | $15.00     | 131K    |    \*     |
 | grok-3-mini       | $0.30     | $0.50      | 131K    |           |
+| **Moonshot**      |           |            |         |           |
+| kimi-k2.5         | $0.60     | $3.00      | 128K    |    \*     |
 
 Full list: [`src/models.ts`](src/models.ts)
+
+### Kimi K2.5: Agentic Workflows
+
+[Kimi K2.5](https://kimi.ai) from Moonshot AI is optimized for agent swarm and multi-step workflows:
+
+- **Agent Swarm** — Coordinates up to 100 parallel agents, 4.5x faster execution
+- **Extended Tool Chains** — Stable across 200-300 sequential tool calls without drift
+- **Vision-to-Code** — Generates production React from UI mockups and videos
+- **Cost Efficient** — 76% cheaper than Claude Opus on agentic benchmarks
+
+Best for: parallel web research, multi-agent orchestration, long-running automation tasks.
 
 ---
 
@@ -183,7 +197,7 @@ USDC stays in your wallet until spent — non-custodial. Price is visible in the
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      BlockRun API                            │
-│         → OpenAI | Anthropic | Google | DeepSeek | xAI      │
+│    → OpenAI | Anthropic | Google | DeepSeek | xAI | Moonshot│
 └─────────────────────────────────────────────────────────────┘
 ```
 

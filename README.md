@@ -64,7 +64,7 @@ Want a specific model? `openclaw config set model openai/gpt-4o` — still get x
 ## See It In Action
 
 <div align="center">
-<img src="docs/assets/telegram-demo.png" alt="ClawRouter in action via Telegram" width="500"/>
+<img src="assets/telegram-demo.png" alt="ClawRouter in action via Telegram" width="500"/>
 </div>
 
 **The flow:**

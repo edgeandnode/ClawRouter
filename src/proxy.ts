@@ -44,6 +44,7 @@ const AUTO_MODEL = "blockrun/auto";
 const USER_AGENT = "clawrouter/0.3.2";
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000; // 3 minutes (allows for on-chain tx + LLM response)
+const DEFAULT_PORT = 8402;
 
 /** Callback info for low balance warning */
 export type LowBalanceInfo = {
@@ -61,6 +62,7 @@ export type InsufficientFundsInfo = {
 export type ProxyOptions = {
   walletKey: string;
   apiBase?: string;
+  /** Port to listen on (default: 8402) */
   port?: number;
   routingConfig?: Partial<RoutingConfig>;
   /** Request timeout in ms (default: 180000 = 3 minutes). Covers on-chain tx + LLM response. */
@@ -229,8 +231,8 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
     }
   });
 
-  // Listen on requested port (0 = random available port)
-  const listenPort = options.port ?? 0;
+  // Listen on requested port (default: 8402)
+  const listenPort = options.port ?? DEFAULT_PORT;
 
   return new Promise<ProxyHandle>((resolve, reject) => {
     server.on("error", reject);

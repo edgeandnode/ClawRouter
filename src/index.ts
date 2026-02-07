@@ -72,9 +72,11 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
       needsWrite = true;
     }
 
-    // Always set blockrun/auto as default (even on upgrade)
-    if (config.models.default !== "blockrun/auto") {
-      config.models.default = "blockrun/auto";
+    // Set blockrun/auto as default model (correct path: agents.defaults.model)
+    if (!config.agents) config.agents = {};
+    if (!config.agents.defaults) config.agents.defaults = {};
+    if (config.agents.defaults.model !== "blockrun/auto") {
+      config.agents.defaults.model = "blockrun/auto";
       needsWrite = true;
     }
 
@@ -287,8 +289,13 @@ const plugin: OpenClawPluginDefinition = {
       models: OPENCLAW_MODELS,
     };
 
-    // Set blockrun/auto as default for smart routing
-    api.config.models.default = "blockrun/auto";
+    // Set blockrun/auto as default for smart routing (agents.defaults.model)
+    if (!api.config.agents) api.config.agents = {};
+    if (!(api.config.agents as Record<string, unknown>).defaults) {
+      (api.config.agents as Record<string, unknown>).defaults = {};
+    }
+    ((api.config.agents as Record<string, unknown>).defaults as Record<string, unknown>).model =
+      "blockrun/auto";
 
     api.logger.info("BlockRun provider registered (default: blockrun/auto)");
 

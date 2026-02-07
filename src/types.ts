@@ -105,7 +105,8 @@ export type OpenClawPluginApi = {
   description?: string;
   source: string;
   config: Record<string, unknown> & {
-    models?: { providers?: Record<string, ModelProviderConfig>; default?: string };
+    models?: { providers?: Record<string, ModelProviderConfig> };
+    agents?: Record<string, unknown>;
   };
   pluginConfig?: Record<string, unknown>;
   logger: PluginLogger;

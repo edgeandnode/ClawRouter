@@ -554,6 +554,7 @@ async function proxyRequest(
       // Convert non-streaming JSON response to SSE streaming format for client
       // (BlockRun API returns JSON since we forced stream:false)
       // OpenClaw expects: object="chat.completion.chunk" with choices[].delta (not message)
+      // We emit proper incremental deltas to match OpenAI's streaming format exactly
       if (upstream.body) {
         const reader = upstream.body.getReader();
         const chunks: Uint8Array[] = [];
@@ -569,32 +570,73 @@ async function proxyRequest(
 
         // Combine chunks and transform to streaming format
         const jsonBody = Buffer.concat(chunks);
-        let ssePayload = jsonBody.toString();
+        const jsonStr = jsonBody.toString();
         try {
-          const rsp = JSON.parse(ssePayload) as {
+          const rsp = JSON.parse(jsonStr) as {
+            id?: string;
             object?: string;
-            choices?: Array<{ message?: unknown; delta?: unknown }>;
+            created?: number;
+            model?: string;
+            choices?: Array<{
+              index?: number;
+              message?: { role?: string; content?: string };
+              delta?: { role?: string; content?: string };
+              finish_reason?: string | null;
+            }>;
+            usage?: unknown;
           };
-          // Convert message → delta for each choice
+
+          // Build base chunk structure (reused for all chunks)
+          const baseChunk = {
+            id: rsp.id ?? `chatcmpl-${Date.now()}`,
+            object: "chat.completion.chunk",
+            created: rsp.created ?? Math.floor(Date.now() / 1000),
+            model: rsp.model ?? "unknown",
+          };
+
+          // Process each choice (usually just one)
           if (rsp.choices && Array.isArray(rsp.choices)) {
-            for (const c of rsp.choices) {
-              if (c.message && !c.delta) {
-                c.delta = c.message;
-                delete c.message;
+            for (const choice of rsp.choices) {
+              const content = choice.message?.content ?? choice.delta?.content ?? "";
+              const role = choice.message?.role ?? choice.delta?.role ?? "assistant";
+              const index = choice.index ?? 0;
+
+              // Chunk 1: role only (mimics OpenAI's first chunk)
+              const roleChunk = {
+                ...baseChunk,
+                choices: [{ index, delta: { role }, finish_reason: null }],
+              };
+              const roleData = `data: ${JSON.stringify(roleChunk)}\n\n`;
+              res.write(roleData);
+              responseChunks.push(Buffer.from(roleData));
+
+              // Chunk 2: content (single chunk with full content)
+              if (content) {
+                const contentChunk = {
+                  ...baseChunk,
+                  choices: [{ index, delta: { content }, finish_reason: null }],
+                };
+                const contentData = `data: ${JSON.stringify(contentChunk)}\n\n`;
+                res.write(contentData);
+                responseChunks.push(Buffer.from(contentData));
               }
+
+              // Chunk 3: finish_reason (signals completion)
+              const finishChunk = {
+                ...baseChunk,
+                choices: [{ index, delta: {}, finish_reason: choice.finish_reason ?? "stop" }],
+              };
+              const finishData = `data: ${JSON.stringify(finishChunk)}\n\n`;
+              res.write(finishData);
+              responseChunks.push(Buffer.from(finishData));
             }
           }
-          // Convert object type to streaming chunk format
-          if (rsp.object === "chat.completion") {
-            rsp.object = "chat.completion.chunk";
-          }
-          ssePayload = JSON.stringify(rsp);
         } catch {
-          // If parsing fails, send as-is
+          // If parsing fails, send raw response as single chunk
+          const sseData = `data: ${jsonStr}\n\n`;
+          res.write(sseData);
+          responseChunks.push(Buffer.from(sseData));
         }
-        const sseData = `data: ${ssePayload}\n\n`;
-        res.write(sseData);
-        responseChunks.push(Buffer.from(sseData));
       }
 
       // Send SSE terminator

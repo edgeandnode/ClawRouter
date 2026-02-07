@@ -446,6 +446,23 @@ Wallet needs funding.
 3. $1-5 is enough for hundreds of requests
 4. Restart OpenClaw
 
+### Security Scanner Warning: "env-harvesting"
+
+OpenClaw's security scanner may flag ClawRouter with:
+
+```
+[env-harvesting] Environment variable access combined with network send
+```
+
+**This is a false positive.** ClawRouter reads `BLOCKRUN_WALLET_KEY` to sign x402 payment transactions — this is required and intentional:
+
+- The wallet key is used **locally** for cryptographic signing (EIP-712)
+- The **signature** is transmitted, not the private key itself
+- This is standard x402 payment protocol behavior
+- Source code is [MIT licensed and fully auditable](https://github.com/BlockRunAI/ClawRouter)
+
+See [`openclaw.security.json`](openclaw.security.json) for detailed security documentation.
+
 ### Port 8402 already in use
 
 ```bash

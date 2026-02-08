@@ -27,11 +27,13 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createPaymentFetch, type PreAuthParams } from "./x402.js";
 import {
   route,
+  getFallbackChain,
   DEFAULT_ROUTING_CONFIG,
   type RouterOptions,
   type RoutingDecision,
   type RoutingConfig,
   type ModelPricing,
+  type Tier,
 } from "./router/index.js";
 import { BLOCKRUN_MODELS } from "./models.js";
 import { logUsage, type UsageEntry } from "./logger.js";
@@ -46,6 +48,102 @@ const AUTO_MODEL_SHORT = "auto"; // OpenClaw strips provider prefix
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000; // 3 minutes (allows for on-chain tx + LLM response)
 const DEFAULT_PORT = 8402;
+const MAX_FALLBACK_ATTEMPTS = 3; // Maximum models to try in fallback chain
+const HEALTH_CHECK_TIMEOUT_MS = 2_000; // Timeout for checking existing proxy
+
+/**
+ * Get the proxy port from environment variable or default.
+ */
+export function getProxyPort(): number {
+  const envPort = process.env.BLOCKRUN_PROXY_PORT;
+  if (envPort) {
+    const parsed = parseInt(envPort, 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed < 65536) {
+      return parsed;
+    }
+  }
+  return DEFAULT_PORT;
+}
+
+/**
+ * Check if a proxy is already running on the given port.
+ * Returns the wallet address if running, undefined otherwise.
+ */
+async function checkExistingProxy(port: number): Promise<string | undefined> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = (await response.json()) as { status?: string; wallet?: string };
+      if (data.status === "ok" && data.wallet) {
+        return data.wallet;
+      }
+    }
+    return undefined;
+  } catch {
+    clearTimeout(timeoutId);
+    return undefined;
+  }
+}
+
+/**
+ * Error patterns that indicate a provider-side issue (not user's fault).
+ * These errors should trigger fallback to the next model in the chain.
+ */
+const PROVIDER_ERROR_PATTERNS = [
+  /billing/i,
+  /insufficient.*balance/i,
+  /credits/i,
+  /quota.*exceeded/i,
+  /rate.*limit/i,
+  /model.*unavailable/i,
+  /model.*not.*available/i,
+  /service.*unavailable/i,
+  /capacity/i,
+  /overloaded/i,
+  /temporarily.*unavailable/i,
+  /api.*key.*invalid/i,
+  /authentication.*failed/i,
+];
+
+/**
+ * HTTP status codes that indicate provider issues worth retrying with fallback.
+ */
+const FALLBACK_STATUS_CODES = [
+  400, // Bad request - sometimes used for billing errors
+  401, // Unauthorized - provider API key issues
+  402, // Payment required - but from upstream, not x402
+  403, // Forbidden - provider restrictions
+  429, // Rate limited
+  500, // Internal server error
+  502, // Bad gateway
+  503, // Service unavailable
+  504, // Gateway timeout
+];
+
+/**
+ * Check if an error response indicates a provider issue that should trigger fallback.
+ */
+function isProviderError(status: number, body: string): boolean {
+  // Check status code first
+  if (!FALLBACK_STATUS_CODES.includes(status)) {
+    return false;
+  }
+
+  // For 5xx errors, always fallback
+  if (status >= 500) {
+    return true;
+  }
+
+  // For 4xx errors, check the body for known provider error patterns
+  return PROVIDER_ERROR_PATTERNS.some((pattern) => pattern.test(body));
+}
 
 // Kimi/Moonshot models use special Unicode tokens for thinking boundaries.
 // Pattern: <｜begin▁of▁thinking｜>content<｜end▁of▁thinking｜>
@@ -102,6 +200,8 @@ export type ProxyOptions = {
   routingConfig?: Partial<RoutingConfig>;
   /** Request timeout in ms (default: 180000 = 3 minutes). Covers on-chain tx + LLM response. */
   requestTimeoutMs?: number;
+  /** Skip balance checks (for testing only). Default: false */
+  skipBalanceCheck?: boolean;
   onReady?: (port: number) => void;
   onError?: (error: Error) => void;
   onPayment?: (info: { model: string; amount: string; network: string }) => void;
@@ -293,6 +393,88 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   });
 }
 
+/** Result of attempting a model request */
+type ModelRequestResult = {
+  success: boolean;
+  response?: Response;
+  errorBody?: string;
+  errorStatus?: number;
+  isProviderError?: boolean;
+};
+
+/**
+ * Attempt a request with a specific model.
+ * Returns the response or error details for fallback decision.
+ */
+async function tryModelRequest(
+  upstreamUrl: string,
+  method: string,
+  headers: Record<string, string>,
+  body: Buffer,
+  modelId: string,
+  maxTokens: number,
+  payFetch: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    preAuth?: PreAuthParams,
+  ) => Promise<Response>,
+  balanceMonitor: BalanceMonitor,
+  signal: AbortSignal,
+): Promise<ModelRequestResult> {
+  // Update model in body
+  let requestBody = body;
+  try {
+    const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
+    parsed.model = modelId;
+    requestBody = Buffer.from(JSON.stringify(parsed));
+  } catch {
+    // If body isn't valid JSON, use as-is
+  }
+
+  // Estimate cost for pre-auth
+  const estimated = estimateAmount(modelId, requestBody.length, maxTokens);
+  const preAuth: PreAuthParams | undefined = estimated
+    ? { estimatedAmount: estimated }
+    : undefined;
+
+  try {
+    const response = await payFetch(
+      upstreamUrl,
+      {
+        method,
+        headers,
+        body: requestBody.length > 0 ? new Uint8Array(requestBody) : undefined,
+        signal,
+      },
+      preAuth,
+    );
+
+    // Check for provider errors
+    if (response.status !== 200) {
+      // Clone response to read body without consuming it
+      const errorBody = await response.text();
+      const isProviderErr = isProviderError(response.status, errorBody);
+
+      return {
+        success: false,
+        errorBody,
+        errorStatus: response.status,
+        isProviderError: isProviderErr,
+      };
+    }
+
+    return { success: true, response };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      errorBody: errorMsg,
+      errorStatus: 500,
+      isProviderError: true, // Network errors are retryable
+    };
+  }
+}
+
 /**
  * Proxy a single request through x402 payment flow to BlockRun API.
  *
@@ -301,6 +483,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
  *   2. Streaming heartbeat — for stream:true, send 200 + heartbeats immediately
  *   3. Payment pre-auth — estimate USDC amount and pre-sign to skip 402 round trip
  *   4. Smart routing — when model is "blockrun/auto", pick cheapest capable model
+ *   5. Fallback chain — on provider errors, try next model in tier's fallback list
  */
 async function proxyRequest(
   req: IncomingMessage,
@@ -426,8 +609,9 @@ async function proxyRequest(
 
   // --- Pre-request balance check ---
   // Estimate cost and check if wallet has sufficient balance
+  // Skip if skipBalanceCheck is set (for testing)
   let estimatedCostMicros: bigint | undefined;
-  if (modelId) {
+  if (modelId && !options.skipBalanceCheck) {
     const estimated = estimateAmount(modelId, body.length, maxTokens);
     if (estimated) {
       estimatedCostMicros = BigInt(estimated);
@@ -516,12 +700,6 @@ async function proxyRequest(
   }
   headers["user-agent"] = USER_AGENT;
 
-  // --- Payment pre-auth: use already-estimated amount to skip 402 round trip ---
-  let preAuth: PreAuthParams | undefined;
-  if (estimatedCostMicros !== undefined) {
-    preAuth = { estimatedAmount: estimatedCostMicros.toString() };
-  }
-
   // --- Client disconnect cleanup ---
   let completed = false;
   res.on("close", () => {
@@ -541,19 +719,74 @@ async function proxyRequest(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Make the request through x402-wrapped fetch (with optional pre-auth)
-    const upstream = await payFetch(
-      upstreamUrl,
-      {
-        method: req.method ?? "POST",
-        headers,
-        body: body.length > 0 ? body : undefined,
-        signal: controller.signal,
-      },
-      preAuth,
-    );
+    // --- Build fallback chain ---
+    // If we have a routing decision, get the full fallback chain for the tier
+    // Otherwise, just use the current model (no fallback for explicit model requests)
+    let modelsToTry: string[];
+    if (routingDecision) {
+      modelsToTry = getFallbackChain(routingDecision.tier, routerOpts.config.tiers);
+      // Limit to MAX_FALLBACK_ATTEMPTS to prevent infinite loops
+      modelsToTry = modelsToTry.slice(0, MAX_FALLBACK_ATTEMPTS);
+    } else {
+      modelsToTry = modelId ? [modelId] : [];
+    }
 
-    // Clear timeout — request succeeded
+    // --- Fallback loop: try each model until success ---
+    let upstream: Response | undefined;
+    let lastError: { body: string; status: number } | undefined;
+    let actualModelUsed = modelId;
+
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const tryModel = modelsToTry[i];
+      const isLastAttempt = i === modelsToTry.length - 1;
+
+      console.log(
+        `[ClawRouter] Trying model ${i + 1}/${modelsToTry.length}: ${tryModel}`,
+      );
+
+      const result = await tryModelRequest(
+        upstreamUrl,
+        req.method ?? "POST",
+        headers,
+        body,
+        tryModel,
+        maxTokens,
+        payFetch,
+        balanceMonitor,
+        controller.signal,
+      );
+
+      if (result.success && result.response) {
+        upstream = result.response;
+        actualModelUsed = tryModel;
+        console.log(`[ClawRouter] Success with model: ${tryModel}`);
+        break;
+      }
+
+      // Request failed
+      lastError = {
+        body: result.errorBody || "Unknown error",
+        status: result.errorStatus || 500,
+      };
+
+      // If it's a provider error and not the last attempt, try next model
+      if (result.isProviderError && !isLastAttempt) {
+        console.log(
+          `[ClawRouter] Provider error from ${tryModel}, trying fallback: ${result.errorBody?.slice(0, 100)}`,
+        );
+        continue;
+      }
+
+      // Not a provider error or last attempt — stop trying
+      if (!result.isProviderError) {
+        console.log(
+          `[ClawRouter] Non-provider error from ${tryModel}, not retrying: ${result.errorBody?.slice(0, 100)}`,
+        );
+      }
+      break;
+    }
+
+    // Clear timeout — request attempts completed
     clearTimeout(timeoutId);
 
     // Clear heartbeat — real data is about to flow
@@ -562,28 +795,60 @@ async function proxyRequest(
       heartbeatInterval = undefined;
     }
 
-    // --- Stream response and collect for dedup cache ---
-    const responseChunks: Buffer[] = [];
+    // Update routing decision with actual model used (for logging)
+    if (routingDecision && actualModelUsed !== routingDecision.model) {
+      routingDecision = {
+        ...routingDecision,
+        model: actualModelUsed,
+        reasoning: `${routingDecision.reasoning} | fallback to ${actualModelUsed}`,
+      };
+      options.onRouted?.(routingDecision);
+    }
 
-    if (headersSentEarly) {
-      // Streaming: headers already sent. Check for upstream errors.
-      if (upstream.status !== 200) {
-        const errBody = await upstream.text();
-        const errEvent = `data: ${JSON.stringify({ error: { message: errBody, type: "upstream_error", status: upstream.status } })}\n\n`;
+    // --- Handle case where all models failed ---
+    if (!upstream) {
+      const errBody = lastError?.body || "All models in fallback chain failed";
+      const errStatus = lastError?.status || 502;
+
+      if (headersSentEarly) {
+        // Streaming: send error as SSE event
+        const errEvent = `data: ${JSON.stringify({ error: { message: errBody, type: "provider_error", status: errStatus } })}\n\n`;
         res.write(errEvent);
         res.write("data: [DONE]\n\n");
         res.end();
 
-        // Cache the error response for dedup
         const errBuf = Buffer.from(errEvent + "data: [DONE]\n\n");
         deduplicator.complete(dedupKey, {
-          status: 200, // we already sent 200
+          status: 200,
           headers: { "content-type": "text/event-stream" },
           body: errBuf,
           completedAt: Date.now(),
         });
-        return;
+      } else {
+        // Non-streaming: send error response
+        res.writeHead(errStatus, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: { message: errBody, type: "provider_error" },
+          }),
+        );
+
+        deduplicator.complete(dedupKey, {
+          status: errStatus,
+          headers: { "content-type": "application/json" },
+          body: Buffer.from(JSON.stringify({ error: { message: errBody, type: "provider_error" } })),
+          completedAt: Date.now(),
+        });
       }
+      return;
+    }
+
+    // --- Stream response and collect for dedup cache ---
+    const responseChunks: Buffer[] = [];
+
+    if (headersSentEarly) {
+      // Streaming: headers already sent. Response should be 200 at this point
+      // (non-200 responses are handled in the fallback loop above)
 
       // Convert non-streaming JSON response to SSE streaming format for client
       // (BlockRun API returns JSON since we forced stream:false)

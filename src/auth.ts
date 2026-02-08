@@ -32,6 +32,9 @@ import type { ProviderAuthMethod, ProviderAuthContext, ProviderAuthResult } from
 const WALLET_DIR = join(homedir(), ".openclaw", "blockrun");
 const WALLET_FILE = join(WALLET_DIR, "wallet.key");
 
+// Export for use by wallet command
+export { WALLET_FILE };
+
 /**
  * Try to load a previously auto-generated wallet key from disk.
  */

@@ -256,6 +256,60 @@ If you explicitly want to use a different wallet:
 2. Set `BLOCKRUN_WALLET_KEY=0x...`
 3. Restart OpenClaw
 
+### Wallet Backup & Recovery
+
+Your wallet private key is stored at `~/.openclaw/blockrun/wallet.key`. **Back up this file before terminating any VPS or machine!**
+
+#### Using the `/wallet` Command
+
+ClawRouter provides a built-in command for wallet management:
+
+```bash
+# Check wallet status (address, balance, file location)
+/wallet
+
+# Export private key for backup (shows the actual key)
+/wallet export
+```
+
+The `/wallet export` command displays your private key so you can copy it before terminating a machine.
+
+#### Manual Backup
+
+```bash
+# Option 1: Copy the key file
+cp ~/.openclaw/blockrun/wallet.key ~/backup-wallet.key
+
+# Option 2: View and copy the key
+cat ~/.openclaw/blockrun/wallet.key
+```
+
+#### Restore on a New Machine
+
+```bash
+# Option 1: Set environment variable (before installing ClawRouter)
+export BLOCKRUN_WALLET_KEY=0x...your_key_here...
+openclaw plugins install @blockrun/clawrouter
+
+# Option 2: Create the key file directly
+mkdir -p ~/.openclaw/blockrun
+echo "0x...your_key_here..." > ~/.openclaw/blockrun/wallet.key
+chmod 600 ~/.openclaw/blockrun/wallet.key
+openclaw plugins install @blockrun/clawrouter
+```
+
+**Important:** If a saved wallet file exists, it takes priority over the environment variable. To use a different wallet, delete the existing file first.
+
+#### Lost Key Recovery
+
+If you lose your wallet key, **there is no way to recover it**. The wallet is self-custodial, meaning only you have the private key. We do not store keys or have any way to restore access.
+
+**Prevention tips:**
+
+- Run `/wallet export` before terminating any VPS
+- Keep a secure backup of `~/.openclaw/blockrun/wallet.key`
+- For production use, consider using a hardware wallet or key management system
+
 ---
 
 ## Architecture

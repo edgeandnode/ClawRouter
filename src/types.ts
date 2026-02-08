@@ -134,3 +134,30 @@ export type OpenClawPluginDefinition = {
   register?: (api: OpenClawPluginApi) => void | Promise<void>;
   activate?: (api: OpenClawPluginApi) => void | Promise<void>;
 };
+
+// Command types for registerCommand
+export type PluginCommandContext = {
+  senderId?: string;
+  channel: string;
+  isAuthorizedSender: boolean;
+  args?: string;
+  commandBody: string;
+  config: Record<string, unknown>;
+};
+
+export type PluginCommandResult = {
+  text?: string;
+  isError?: boolean;
+};
+
+export type PluginCommandHandler = (
+  ctx: PluginCommandContext,
+) => PluginCommandResult | Promise<PluginCommandResult>;
+
+export type OpenClawPluginCommandDefinition = {
+  name: string;
+  description: string;
+  acceptsArgs?: boolean;
+  requireAuth?: boolean;
+  handler: PluginCommandHandler;
+};

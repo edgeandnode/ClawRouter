@@ -36,6 +36,7 @@ import {
 } from "./router/index.js";
 import { BLOCKRUN_MODELS } from "./models.js";
 import { logUsage, type UsageEntry } from "./logger.js";
+import { getStats, generateDashboardHtml } from "./stats.js";
 import { RequestDeduplicator } from "./dedup.js";
 import { BalanceMonitor } from "./balance.js";
 import { InsufficientFundsError, EmptyWalletError } from "./errors.js";
@@ -408,6 +409,53 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
 
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(response));
+      return;
+    }
+
+    // Dashboard endpoint - serves HTML analytics page
+    if (req.url === "/dashboard" || req.url?.startsWith("/dashboard?")) {
+      try {
+        const url = new URL(req.url, "http://localhost");
+        const days = parseInt(url.searchParams.get("days") || "7", 10);
+        const stats = await getStats(Math.min(days, 30));
+        const html = generateDashboardHtml(stats);
+
+        res.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-cache",
+        });
+        res.end(html);
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: `Failed to generate dashboard: ${err instanceof Error ? err.message : String(err)}`,
+          }),
+        );
+      }
+      return;
+    }
+
+    // Stats API endpoint - returns JSON for programmatic access
+    if (req.url === "/stats" || req.url?.startsWith("/stats?")) {
+      try {
+        const url = new URL(req.url, "http://localhost");
+        const days = parseInt(url.searchParams.get("days") || "7", 10);
+        const stats = await getStats(Math.min(days, 30));
+
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+        });
+        res.end(JSON.stringify(stats, null, 2));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            error: `Failed to get stats: ${err instanceof Error ? err.message : String(err)}`,
+          }),
+        );
+      }
       return;
     }
 
@@ -1135,7 +1183,10 @@ async function proxyRequest(
     const entry: UsageEntry = {
       timestamp: new Date().toISOString(),
       model: routingDecision.model,
+      tier: routingDecision.tier,
       cost: routingDecision.costEstimate,
+      baselineCost: routingDecision.baselineCost,
+      savings: routingDecision.savings,
       latencyMs: Date.now() - startTime,
     };
     logUsage(entry).catch(() => {});

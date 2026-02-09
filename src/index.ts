@@ -111,6 +111,19 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
       needsWrite = true;
     }
 
+    // Add blockrun models to allowlist if one exists (agents.defaults.models)
+    // This ensures /model blockrun/auto and /model blockrun/free work
+    if (config.agents.defaults.models && typeof config.agents.defaults.models === "object") {
+      const allowlist = config.agents.defaults.models as Record<string, unknown>;
+      const blockrunModelsToAllow = ["blockrun/auto", "blockrun/free", "blockrun/gpt-120b"];
+      for (const model of blockrunModelsToAllow) {
+        if (!allowlist[model]) {
+          allowlist[model] = { alias: model.split("/")[1] };
+          needsWrite = true;
+        }
+      }
+    }
+
     if (needsWrite) {
       writeFileSync(configPath, JSON.stringify(config, null, 2));
       logger.info("Set default model to blockrun/auto (smart routing enabled)");

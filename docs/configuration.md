@@ -6,10 +6,13 @@ Complete reference for ClawRouter configuration options.
 
 - [Environment Variables](#environment-variables)
 - [Wallet Configuration](#wallet-configuration)
+- [Wallet Backup & Recovery](#wallet-backup--recovery)
 - [Proxy Settings](#proxy-settings)
+- [Programmatic Usage](#programmatic-usage)
 - [Routing Configuration](#routing-configuration)
 - [Tier Overrides](#tier-overrides)
 - [Scoring Weights](#scoring-weights)
+- [Testing Configuration](#testing-configuration)
 
 ---
 
@@ -104,6 +107,60 @@ cp ~/.openclaw/blockrun/wallet.key ~/backup/
 cat ~/.openclaw/blockrun/wallet.key
 ```
 
+### Wallet Backup & Recovery
+
+Your wallet private key is stored at `~/.openclaw/blockrun/wallet.key`. **Back up this file before terminating any VPS or machine!**
+
+#### Using the `/wallet` Command
+
+ClawRouter provides a built-in command for wallet management:
+
+```bash
+# Check wallet status (address, balance, file location)
+/wallet
+
+# Export private key for backup (shows the actual key)
+/wallet export
+```
+
+The `/wallet export` command displays your private key so you can copy it before terminating a machine.
+
+#### Manual Backup
+
+```bash
+# Option 1: Copy the key file
+cp ~/.openclaw/blockrun/wallet.key ~/backup-wallet.key
+
+# Option 2: View and copy the key
+cat ~/.openclaw/blockrun/wallet.key
+```
+
+#### Restore on a New Machine
+
+```bash
+# Option 1: Set environment variable (before installing ClawRouter)
+export BLOCKRUN_WALLET_KEY=0x...your_key_here...
+openclaw plugins install @blockrun/clawrouter
+
+# Option 2: Create the key file directly
+mkdir -p ~/.openclaw/blockrun
+echo "0x...your_key_here..." > ~/.openclaw/blockrun/wallet.key
+chmod 600 ~/.openclaw/blockrun/wallet.key
+openclaw plugins install @blockrun/clawrouter
+```
+
+**Important:** If a saved wallet file exists, it takes priority over the environment variable. To use a different wallet, delete the existing file first.
+
+#### Lost Key Recovery
+
+If you lose your wallet key, **there is no way to recover it**. The wallet is self-custodial, meaning only you have the private key. We do not store keys or have any way to restore access.
+
+**Prevention tips:**
+
+- Run `/wallet export` before terminating any VPS
+- Keep a secure backup of `~/.openclaw/blockrun/wallet.key`
+- For production use, consider using a hardware wallet or key management system
+
 ---
 
 ## Proxy Settings
@@ -124,7 +181,62 @@ Session 2: startProxy() → detects existing, reuses handle
 - `close()` on reused handles is a no-op (doesn't stop the original server)
 - Warning logged if existing proxy uses a different wallet
 
+### Programmatic Usage
+
+Use ClawRouter without OpenClaw:
+
+```typescript
+import { startProxy } from "@blockrun/clawrouter";
+
+const proxy = await startProxy({
+  walletKey: process.env.BLOCKRUN_WALLET_KEY!,
+  onReady: (port) => console.log(`Proxy on port ${port}`),
+  onRouted: (d) => console.log(`${d.model} saved ${(d.savings * 100).toFixed(0)}%`),
+});
+
+// Any OpenAI-compatible client works
+const res = await fetch(`${proxy.baseUrl}/v1/chat/completions`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    model: "blockrun/auto",
+    messages: [{ role: "user", content: "What is 2+2?" }],
+  }),
+});
+
+await proxy.close();
+```
+
+Or use the router directly (no proxy, no payments):
+
+```typescript
+import { route, DEFAULT_ROUTING_CONFIG, BLOCKRUN_MODELS } from "@blockrun/clawrouter";
+
+// Build pricing map
+const modelPricing = new Map();
+for (const m of BLOCKRUN_MODELS) {
+  modelPricing.set(m.id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice });
+}
+
+const decision = route("Prove sqrt(2) is irrational", undefined, 4096, {
+  config: DEFAULT_ROUTING_CONFIG,
+  modelPricing,
+});
+
+console.log(decision);
+// {
+//   model: "deepseek/deepseek-reasoner",
+//   tier: "REASONING",
+//   confidence: 0.97,
+//   method: "rules",
+//   savings: 0.994,
+//   costEstimate: 0.002,
+// }
+```
+
 ### Programmatic Options
+
+All options for `startProxy()`:
 
 ```typescript
 import { startProxy } from "@blockrun/clawrouter";
@@ -240,14 +352,14 @@ routing:
 
 ## Scoring Weights
 
-The 14-dimension weighted scorer determines query complexity:
+The 15-dimension weighted scorer determines query complexity:
 
 | Dimension             | Weight | Detection                                |
 | --------------------- | ------ | ---------------------------------------- |
 | `reasoningMarkers`    | 0.18   | "prove", "theorem", "step by step"       |
 | `codePresence`        | 0.15   | "function", "async", "import", "```"     |
-| `simpleIndicators`    | 0.12   | "what is", "define", "translate"         |
 | `multiStepPatterns`   | 0.12   | "first...then", "step 1", numbered lists |
+| `agenticTask`         | 0.10   | "run", "test", "fix", "deploy", "edit"   |
 | `technicalTerms`      | 0.10   | "algorithm", "kubernetes", "distributed" |
 | `tokenCount`          | 0.08   | short (<50) vs long (>500)               |
 | `creativeMarkers`     | 0.05   | "story", "poem", "brainstorm"            |
@@ -255,6 +367,7 @@ The 14-dimension weighted scorer determines query complexity:
 | `constraintCount`     | 0.04   | "at most", "O(n)", "maximum"             |
 | `imperativeVerbs`     | 0.03   | "build", "create", "implement"           |
 | `outputFormat`        | 0.03   | "json", "yaml", "schema"                 |
+| `simpleIndicators`    | 0.02   | "what is", "define", "translate"         |
 | `domainSpecificity`   | 0.02   | "quantum", "fpga", "genomics"            |
 | `referenceComplexity` | 0.02   | "the docs", "the api", "above"           |
 | `negationComplexity`  | 0.01   | "don't", "avoid", "without"              |

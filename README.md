@@ -10,7 +10,7 @@ One wallet, 30+ models, zero API keys.
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://typescriptlang.org)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](https://nodejs.org)
 
-[Docs](https://blockrun.ai/docs) &middot; [Models](https://blockrun.ai/models) &middot; [Configuration](docs/configuration.md) &middot; [Architecture](docs/architecture.md) &middot; [Telegram](https://t.me/blockrunAI) &middot; [X](https://x.com/BlockRunAI)
+[Docs](https://blockrun.ai/docs) &middot; [Models](https://blockrun.ai/models) &middot; [Configuration](docs/configuration.md) &middot; [Features](docs/features.md) &middot; [Troubleshooting](docs/troubleshooting.md) &middot; [Telegram](https://t.me/blockrunAI) &middot; [X](https://x.com/BlockRunAI)
 
 </div>
 
@@ -94,41 +94,7 @@ Request → Weighted Scorer (15 dimensions)
 
 No external classifier calls. Ambiguous queries default to the MEDIUM tier (DeepSeek/GPT-4o-mini) — fast, cheap, and good enough for most tasks.
 
-### 15-Dimension Weighted Scoring
-
-| Dimension            | Weight | What It Detects                          |
-| -------------------- | ------ | ---------------------------------------- |
-| Reasoning markers    | 0.18   | "prove", "theorem", "step by step"       |
-| Code presence        | 0.15   | "function", "async", "import", "```"     |
-| Multi-step patterns  | 0.12   | "first...then", "step 1", numbered lists |
-| **Agentic task**     | 0.10   | "run", "test", "fix", "deploy", "edit"   |
-| Technical terms      | 0.10   | "algorithm", "kubernetes", "distributed" |
-| Token count          | 0.08   | short (<50) vs long (>500) prompts       |
-| Creative markers     | 0.05   | "story", "poem", "brainstorm"            |
-| Question complexity  | 0.05   | Multiple question marks                  |
-| Constraint count     | 0.04   | "at most", "O(n)", "maximum"             |
-| Imperative verbs     | 0.03   | "build", "create", "implement"           |
-| Output format        | 0.03   | "json", "yaml", "schema"                 |
-| Simple indicators    | 0.02   | "what is", "define", "translate"         |
-| Domain specificity   | 0.02   | "quantum", "fpga", "genomics"            |
-| Reference complexity | 0.02   | "the docs", "the api", "above"           |
-| Negation complexity  | 0.01   | "don't", "avoid", "without"              |
-
-Weighted sum → sigmoid confidence calibration → tier selection.
-
-### Supported Languages
-
-ClawRouter's keyword-based routing works with prompts in:
-
-| Language              | Script       | Examples                       |
-| --------------------- | ------------ | ------------------------------ |
-| **English**           | Latin        | Full support (default)         |
-| **Chinese (中文)**    | Han/CJK      | 证明, 定理, 你好, 什么是       |
-| **Japanese (日本語)** | Kanji + Kana | 証明, こんにちは, アルゴリズム |
-| **Russian (Русский)** | Cyrillic     | доказать, привет, алгоритм     |
-| **German (Deutsch)**  | Latin        | beweisen, hallo, algorithmus   |
-
-Mixed-language prompts are supported — keywords from all languages are checked simultaneously.
+**Deep dive:** [15-dimension scoring weights](docs/configuration.md#scoring-weights) | [Architecture](docs/architecture.md)
 
 ### Tier → Model Mapping
 
@@ -141,122 +107,20 @@ Mixed-language prompts are supported — keywords from all languages are checked
 
 Special rule: 2+ reasoning markers → REASONING at 0.97 confidence.
 
-### Agentic Auto-Detection
+### Advanced Features
 
-ClawRouter automatically detects multi-step agentic tasks and routes to models optimized for autonomous execution:
+ClawRouter v0.5+ includes intelligent features that work automatically:
 
-```
-"what is 2+2"                    → gemini-flash (standard)
-"build the project then run tests" → kimi-k2.5 (auto-agentic)
-"fix the bug and make sure it works" → kimi-k2.5 (auto-agentic)
-```
+- **Agentic auto-detect** — routes multi-step tasks to Kimi K2.5
+- **Tool detection** — auto-switches when `tools` array present
+- **Context-aware** — filters models that can't handle your context size
+- **Model aliases** — `/model free`, `/model sonnet`, `/model grok`
+- **Session persistence** — pins model for multi-turn conversations
+- **Free tier fallback** — keeps working when wallet is empty
 
-**How it works:**
+**Full details:** [docs/features.md](docs/features.md)
 
-- Detects agentic keywords: file ops ("read", "edit"), execution ("run", "test", "deploy"), iteration ("fix", "debug", "verify")
-- Threshold: 2+ signals triggers auto-switch to agentic tiers
-- No config needed — works automatically
-
-**Agentic tier models** (optimized for multi-step autonomy):
-
-| Tier      | Agentic Model    | Why                            |
-| --------- | ---------------- | ------------------------------ |
-| SIMPLE    | claude-haiku-4.5 | Fast + reliable tool use       |
-| MEDIUM    | kimi-k2.5        | 200+ tool chains, 76% cheaper  |
-| COMPLEX   | claude-sonnet-4  | Best balance for complex tasks |
-| REASONING | kimi-k2.5        | Extended reasoning + execution |
-
-You can also force agentic mode via config:
-
-```yaml
-# openclaw.yaml
-plugins:
-  - id: "@blockrun/clawrouter"
-    config:
-      routing:
-        overrides:
-          agenticMode: true # Always use agentic tiers
-```
-
-### Tool Detection (v0.5)
-
-When your request includes a `tools` array (function calling), ClawRouter automatically switches to agentic tiers:
-
-```typescript
-// Request with tools → auto-agentic mode
-{
-  model: "blockrun/auto",
-  messages: [{ role: "user", content: "Check the weather" }],
-  tools: [{ type: "function", function: { name: "get_weather", ... } }]
-}
-// → Routes to claude-haiku-4.5 (excellent tool use)
-// → Instead of gemini-flash (may produce malformed tool calls)
-```
-
-**Why this matters:** Some models (like `deepseek-reasoner`) are optimized for chain-of-thought reasoning but can generate malformed tool calls. Tool detection ensures requests with functions go to models proven to handle tool use correctly.
-
-### Context-Length-Aware Routing (v0.5)
-
-ClawRouter automatically filters out models that can't handle your context size:
-
-```
-150K token request:
-  Full chain: [grok-4-fast (131K), deepseek (128K), kimi (262K), gemini (1M)]
-  Filtered:   [kimi (262K), gemini (1M)]
-  → Skips models that would fail with "context too long" errors
-```
-
-This prevents wasted API calls and faster fallback to capable models.
-
-### Model Aliases (v0.5)
-
-Use short aliases instead of full model paths:
-
-```bash
-/model free      # gpt-oss-120b (FREE!)
-/model sonnet    # anthropic/claude-sonnet-4
-/model opus      # anthropic/claude-opus-4
-/model haiku     # anthropic/claude-haiku-4.5
-/model gpt       # openai/gpt-4o
-/model gpt5      # openai/gpt-5.2
-/model deepseek  # deepseek/deepseek-chat
-/model reasoner  # deepseek/deepseek-reasoner
-/model kimi      # moonshot/kimi-k2.5
-/model gemini    # google/gemini-2.5-pro
-/model flash     # google/gemini-2.5-flash
-/model grok      # xai/grok-3
-/model grok-fast # xai/grok-4-fast-reasoning
-```
-
-All aliases work with `/model blockrun/xxx` or just `/model xxx`.
-
-### Free Tier Fallback (v0.5)
-
-When your wallet balance hits $0, ClawRouter automatically falls back to the free model (`gpt-oss-120b`):
-
-```
-Wallet: $0.00
-Request: "Help me write a function"
-→ Routes to gpt-oss-120b (FREE)
-→ No "insufficient funds" error
-→ Keep building while you top up
-```
-
-You'll never get blocked by an empty wallet — the free tier keeps you running.
-
-### Session Persistence (v0.5)
-
-For multi-turn conversations, ClawRouter pins the model to prevent mid-task switching:
-
-```
-Turn 1: "Build a React component" → claude-sonnet-4
-Turn 2: "Add dark mode support"   → claude-sonnet-4 (pinned)
-Turn 3: "Now add tests"           → claude-sonnet-4 (pinned)
-```
-
-Sessions are identified by conversation ID and persist for 1 hour of inactivity.
-
-### Cost Savings (Real Numbers)
+### Cost Savings
 
 | Tier                | % of Traffic | Cost/M      |
 | ------------------- | ------------ | ----------- |
@@ -339,99 +203,17 @@ USDC stays in your wallet until spent — non-custodial. Price is visible in the
 
 ## Wallet Configuration
 
-ClawRouter uses one environment variable: `BLOCKRUN_WALLET_KEY`
-
-### Resolution Order
-
-| Priority | Source                                         | Behavior                          |
-| -------- | ---------------------------------------------- | --------------------------------- |
-| 1st      | Saved file (`~/.openclaw/blockrun/wallet.key`) | Used if exists                    |
-| 2nd      | `BLOCKRUN_WALLET_KEY` env var                  | Used if no saved file             |
-| 3rd      | Auto-generate                                  | Creates new wallet, saves to file |
-
-**Important:** The saved file takes priority over the environment variable. If you have both, the env var is ignored.
-
-### Common Scenarios
+ClawRouter auto-generates and saves a wallet at `~/.openclaw/blockrun/wallet.key`.
 
 ```bash
-# Check if a saved wallet exists
-ls -la ~/.openclaw/blockrun/wallet.key
-
-# Use your own wallet (only works if no saved file exists)
-export BLOCKRUN_WALLET_KEY=0x...
-
-# Force use of a different wallet
-rm ~/.openclaw/blockrun/wallet.key
-export BLOCKRUN_WALLET_KEY=0x...
-openclaw restart
-
-# See which wallet is active
-curl http://localhost:8402/health | jq .wallet
-```
-
-### Why This Order?
-
-The saved file is checked first to ensure wallet persistence across sessions. Once a wallet is generated and funded, you don't want an accidentally-set env var to switch wallets and leave your funds inaccessible.
-
-If you explicitly want to use a different wallet:
-
-1. Delete `~/.openclaw/blockrun/wallet.key`
-2. Set `BLOCKRUN_WALLET_KEY=0x...`
-3. Restart OpenClaw
-
-### Wallet Backup & Recovery
-
-Your wallet private key is stored at `~/.openclaw/blockrun/wallet.key`. **Back up this file before terminating any VPS or machine!**
-
-#### Using the `/wallet` Command
-
-ClawRouter provides a built-in command for wallet management:
-
-```bash
-# Check wallet status (address, balance, file location)
+# Check wallet status
 /wallet
 
-# Export private key for backup (shows the actual key)
-/wallet export
+# Use your own wallet
+export BLOCKRUN_WALLET_KEY=0x...
 ```
 
-The `/wallet export` command displays your private key so you can copy it before terminating a machine.
-
-#### Manual Backup
-
-```bash
-# Option 1: Copy the key file
-cp ~/.openclaw/blockrun/wallet.key ~/backup-wallet.key
-
-# Option 2: View and copy the key
-cat ~/.openclaw/blockrun/wallet.key
-```
-
-#### Restore on a New Machine
-
-```bash
-# Option 1: Set environment variable (before installing ClawRouter)
-export BLOCKRUN_WALLET_KEY=0x...your_key_here...
-openclaw plugins install @blockrun/clawrouter
-
-# Option 2: Create the key file directly
-mkdir -p ~/.openclaw/blockrun
-echo "0x...your_key_here..." > ~/.openclaw/blockrun/wallet.key
-chmod 600 ~/.openclaw/blockrun/wallet.key
-openclaw plugins install @blockrun/clawrouter
-```
-
-**Important:** If a saved wallet file exists, it takes priority over the environment variable. To use a different wallet, delete the existing file first.
-
-#### Lost Key Recovery
-
-If you lose your wallet key, **there is no way to recover it**. The wallet is self-custodial, meaning only you have the private key. We do not store keys or have any way to restore access.
-
-**Prevention tips:**
-
-- Run `/wallet export` before terminating any VPS
-- Keep a secure backup of `~/.openclaw/blockrun/wallet.key`
-- For production use, consider using a hardware wallet or key management system
+**Full reference:** [Wallet configuration](docs/configuration.md#wallet-configuration) | [Backup & recovery](docs/configuration.md#wallet-backup--recovery)
 
 ---
 
@@ -466,40 +248,13 @@ Routing is **client-side** — open source and inspectable.
 
 ## Configuration
 
-For basic usage, no configuration is needed. For advanced options:
+For basic usage, no configuration needed. For advanced options:
 
-| Setting               | Default  | Description                          |
-| --------------------- | -------- | ------------------------------------ |
-| `CLAWROUTER_DISABLED` | `false`  | Disable plugin (use default routing) |
-| `BLOCKRUN_PROXY_PORT` | `8402`   | Proxy port (env var)                 |
-| `BLOCKRUN_WALLET_KEY` | auto     | Wallet private key (env var)         |
-| `routing.tiers`       | see docs | Override tier→model mappings         |
-| `routing.scoring`     | see docs | Custom keyword weights               |
-
-**Quick examples:**
-
-```bash
-# Temporarily disable ClawRouter (use OpenClaw's default routing)
-CLAWROUTER_DISABLED=true openclaw gateway restart
-
-# Re-enable ClawRouter
-openclaw gateway restart
-
-# Use different port
-export BLOCKRUN_PROXY_PORT=8403
-openclaw gateway restart
-```
-
-```yaml
-# openclaw.yaml — override models
-plugins:
-  - id: "@blockrun/clawrouter"
-    config:
-      routing:
-        tiers:
-          COMPLEX:
-            primary: "openai/gpt-4o"
-```
+| Setting               | Default | Description           |
+| --------------------- | ------- | --------------------- |
+| `CLAWROUTER_DISABLED` | `false` | Disable smart routing |
+| `BLOCKRUN_PROXY_PORT` | `8402`  | Proxy port            |
+| `BLOCKRUN_WALLET_KEY` | auto    | Wallet private key    |
 
 **Full reference:** [docs/configuration.md](docs/configuration.md)
 
@@ -507,56 +262,19 @@ plugins:
 
 ## Programmatic Usage
 
-Use without OpenClaw:
+Use ClawRouter directly in your code:
 
 ```typescript
-import { startProxy } from "@blockrun/clawrouter";
+import { startProxy, route } from "@blockrun/clawrouter";
 
-const proxy = await startProxy({
-  walletKey: process.env.BLOCKRUN_WALLET_KEY!,
-  onReady: (port) => console.log(`Proxy on port ${port}`),
-  onRouted: (d) => console.log(`${d.model} saved ${(d.savings * 100).toFixed(0)}%`),
-});
+// Start proxy server
+const proxy = await startProxy({ walletKey: "0x..." });
 
-// Any OpenAI-compatible client works
-const res = await fetch(`${proxy.baseUrl}/v1/chat/completions`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    model: "blockrun/auto",
-    messages: [{ role: "user", content: "What is 2+2?" }],
-  }),
-});
-
-await proxy.close();
+// Or use router directly (no proxy)
+const decision = route("Prove sqrt(2) is irrational", ...);
 ```
 
-Or use the router directly:
-
-```typescript
-import { route, DEFAULT_ROUTING_CONFIG, BLOCKRUN_MODELS } from "@blockrun/clawrouter";
-
-// Build pricing map
-const modelPricing = new Map();
-for (const m of BLOCKRUN_MODELS) {
-  modelPricing.set(m.id, { inputPrice: m.inputPrice, outputPrice: m.outputPrice });
-}
-
-const decision = route("Prove sqrt(2) is irrational", undefined, 4096, {
-  config: DEFAULT_ROUTING_CONFIG,
-  modelPricing,
-});
-
-console.log(decision);
-// {
-//   model: "deepseek/deepseek-reasoner",
-//   tier: "REASONING",
-//   confidence: 0.97,
-//   method: "rules",
-//   savings: 0.994,
-//   costEstimate: 0.002,
-// }
-```
+**Full examples:** [docs/configuration.md#programmatic-usage](docs/configuration.md#programmatic-usage)
 
 ---
 
@@ -568,36 +286,11 @@ console.log(decision);
 
 ---
 
-## Cost Tracking with /stats (v0.5)
+## Cost Tracking
 
-Track your savings in real-time:
+Track your savings with `/stats` in any OpenClaw conversation.
 
-```bash
-# In any OpenClaw conversation
-/stats
-```
-
-Output:
-
-```
-╔════════════════════════════════════════════════════════════╗
-║              ClawRouter Usage Statistics                   ║
-╠════════════════════════════════════════════════════════════╣
-║  Period: last 7 days                                      ║
-║  Total Requests: 442                                      ║
-║  Total Cost: $1.73                                       ║
-║  Baseline Cost (Opus): $20.13                            ║
-║  💰 Total Saved: $18.40 (91.4%)                            ║
-╠════════════════════════════════════════════════════════════╣
-║  Routing by Tier:                                          ║
-║    SIMPLE     ███████████           55.0% (243)            ║
-║    MEDIUM     ██████                30.8% (136)            ║
-║    COMPLEX    █                      7.2% (32)             ║
-║    REASONING  █                      7.0% (31)             ║
-╚════════════════════════════════════════════════════════════╝
-```
-
-Stats are stored locally at `~/.openclaw/blockrun/logs/` and aggregated on demand.
+**Full details:** [docs/features.md#cost-tracking-with-stats](docs/features.md#cost-tracking-with-stats)
 
 ---
 
@@ -618,124 +311,17 @@ Agents shouldn't need a human to paste API keys. They should generate a wallet, 
 
 ## Troubleshooting
 
-> 💬 **Need help?** [Open a Discussion](https://github.com/BlockRunAI/ClawRouter/discussions) or check [existing issues](https://github.com/BlockRunAI/ClawRouter/issues).
-
-### Quick Checklist
+Quick checklist:
 
 ```bash
-# 1. Check your version (should be 0.5.7+)
+# Check version (should be 0.5.7+)
 cat ~/.openclaw/extensions/clawrouter/package.json | grep version
 
-# 2. Check proxy is running
+# Check proxy running
 curl http://localhost:8402/health
-
-# 3. Watch routing in action
-openclaw logs --follow
-# Should see: gemini-2.5-flash $0.0012 (saved 99%)
-
-# 4. View cost savings
-/stats
 ```
 
-### "Unknown model: blockrun/auto" or "Unknown model: auto"
-
-Plugin isn't loaded or outdated. **Don't change the model name** — `blockrun/auto` is correct.
-
-**Fix:** Update to v0.3.21+ which handles both `blockrun/auto` and `auto` (OpenClaw strips provider prefix). See [How to Update ClawRouter](#how-to-update-clawrouter).
-
-### "No API key found for provider blockrun"
-
-Auth profile is missing or wasn't created properly.
-
-**Fix:** See [How to Update ClawRouter](#how-to-update-clawrouter) — the reinstall script automatically injects the auth profile.
-
-### "Config validation failed: plugin not found: clawrouter"
-
-Plugin directory was removed but config still references it. This blocks all OpenClaw commands until fixed.
-
-**Fix:** See [How to Update ClawRouter](#how-to-update-clawrouter) for complete cleanup steps.
-
-### "No USDC balance" / "Insufficient funds"
-
-Wallet needs funding.
-
-**Fix:**
-
-1. Find your wallet address (printed during install)
-2. Send USDC on **Base network** to that address
-3. $1-5 is enough for hundreds of requests
-4. Restart OpenClaw
-
-### "WARNING: dangerous code patterns — possible credential harvesting"
-
-This is a **false positive**. ClawRouter legitimately:
-
-1. Reads `BLOCKRUN_WALLET_KEY` from environment (for authentication)
-2. Sends authenticated requests to BlockRun API (for x402 micropayments)
-
-This pattern triggers OpenClaw's security scanner, but it's the intended behavior — the wallet key is required to sign payment transactions. The code is fully open source and auditable.
-
-### Security Scanner Warning: "env-harvesting"
-
-OpenClaw's security scanner may flag ClawRouter with:
-
-```
-[env-harvesting] Environment variable access combined with network send
-```
-
-**This is a false positive.** The scanner's heuristic (`env variable + network request = suspicious`) flags all payment plugins, but this pattern is inherently required for non-custodial payments.
-
-ClawRouter reads `BLOCKRUN_WALLET_KEY` to sign x402 payment transactions — this is required and intentional:
-
-- The wallet key is used **locally** for cryptographic signing (EIP-712)
-- The **signature** is transmitted, not the private key itself
-- The key **never leaves the machine** — only cryptographic proofs are sent
-- This is standard [x402 payment protocol](https://x402.org) behavior
-- Source code is [MIT licensed and fully auditable](https://github.com/BlockRunAI/ClawRouter)
-
-See [`openclaw.security.json`](openclaw.security.json) for detailed security documentation and [this discussion](https://x.com/bc1beat/status/2020158972561428686) for more context.
-
-### Port 8402 already in use
-
-As of v0.4.1, ClawRouter automatically detects and reuses an existing proxy on the configured port instead of failing with `EADDRINUSE`. You should no longer see this error.
-
-If you need to use a different port:
-
-```bash
-# Set custom port via environment variable
-export BLOCKRUN_PROXY_PORT=8403
-openclaw gateway restart
-```
-
-To manually check/kill the process:
-
-```bash
-lsof -i :8402
-# Kill the process or restart OpenClaw
-```
-
-### How to Update ClawRouter
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/BlockRunAI/ClawRouter/main/scripts/reinstall.sh | bash
-openclaw gateway restart
-```
-
-This removes the old version, installs the latest, and restarts the gateway.
-
-### Verify Routing is Working
-
-```bash
-openclaw logs --follow
-```
-
-You should see model selection for each request:
-
-```
-[plugins] [SIMPLE] google/gemini-2.5-flash $0.0012 (saved 99%)
-[plugins] [MEDIUM] deepseek/deepseek-chat $0.0003 (saved 99%)
-[plugins] [REASONING] deepseek/deepseek-reasoner $0.0005 (saved 99%)
-```
+**Full guide:** [docs/troubleshooting.md](docs/troubleshooting.md)
 
 ---
 

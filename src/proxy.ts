@@ -449,6 +449,19 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
       return;
     }
 
+    // --- Handle /v1/models locally (no upstream call needed) ---
+    if (req.url === "/v1/models" && req.method === "GET") {
+      const models = BLOCKRUN_MODELS.filter((m) => m.id !== "blockrun/auto").map((m) => ({
+        id: m.id,
+        object: "model",
+        created: Math.floor(Date.now() / 1000),
+        owned_by: m.id.split("/")[0] || "unknown",
+      }));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ object: "list", data: models }));
+      return;
+    }
+
     // Only proxy paths starting with /v1
     if (!req.url?.startsWith("/v1")) {
       res.writeHead(404, { "Content-Type": "application/json" });

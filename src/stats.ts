@@ -267,7 +267,8 @@ export function formatStatsAscii(stats: AggregatedStats): string {
 }
 
 /**
- * Generate HTML dashboard page.
+ * Generate HTML dashboard page with BlockRun design style.
+ * Matches the design patterns from blockrun.ai
  */
 export function generateDashboardHtml(stats: AggregatedStats): string {
   const tierData = Object.entries(stats.byTier).map(([tier, data]) => ({
@@ -285,10 +286,11 @@ export function generateDashboardHtml(stats: AggregatedStats): string {
       cost: data.cost.toFixed(4),
     }));
 
+  // Benchmark comparison data: ClawRouter cost vs what it would cost with premium models
   const dailyData = stats.dailyBreakdown.map((day) => ({
     date: day.date,
-    cost: day.totalCost.toFixed(4),
-    saved: (day.totalBaselineCost - day.totalCost).toFixed(4),
+    clawRouter: day.totalCost.toFixed(4),
+    baseline: day.totalBaselineCost.toFixed(4), // Claude Opus 4 baseline
     requests: day.totalRequests,
   }));
 
@@ -298,206 +300,358 @@ export function generateDashboardHtml(stats: AggregatedStats): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ClawRouter Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #09090b;
       color: #fff;
       min-height: 100vh;
-      padding: 2rem;
+      line-height: 1.5;
     }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    /* Header - BlockRun style */
     .header {
-      text-align: center;
+      padding-bottom: 2rem;
       margin-bottom: 2rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
     }
     .header h1 {
       font-size: 2.5rem;
-      background: linear-gradient(90deg, #f39c12, #e74c3c);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      color: #fff;
       margin-bottom: 0.5rem;
     }
-    .header p { color: #888; }
+    .header p {
+      color: #a1a1aa;
+      font-size: 0.875rem;
+    }
+
+    /* Stats grid - card style from BlockRun */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
       margin-bottom: 2rem;
     }
     .stat-card {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
-      padding: 1.5rem;
-      text-align: center;
       border: 1px solid rgba(255,255,255,0.1);
-    }
-    .stat-card .value {
-      font-size: 2rem;
-      font-weight: bold;
-      color: #f39c12;
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      background: rgba(24, 24, 27, 0.6);
     }
     .stat-card .label {
-      color: #888;
-      font-size: 0.9rem;
-      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
     }
-    .stat-card.savings .value { color: #2ecc71; }
+    .stat-card .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: #fff;
+    }
+    .stat-card.highlight .value {
+      color: #22c55e;
+    }
+
+    /* Charts section */
     .charts-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 2rem;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
     }
     .chart-card {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
-      padding: 1.5rem;
       border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      background: rgba(24, 24, 27, 0.6);
     }
-    .chart-card h3 {
+    .chart-card .section-label {
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       margin-bottom: 1rem;
-      color: #fff;
     }
-    canvas { max-height: 300px; }
-    .table-card {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
-      padding: 1.5rem;
+    canvas { max-height: 260px; }
+
+    /* Table section */
+    .table-section {
       border: 1px solid rgba(255,255,255,0.1);
-      margin-top: 2rem;
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      background: rgba(24, 24, 27, 0.6);
+      margin-bottom: 2rem;
+    }
+    .table-section .section-label {
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #a1a1aa;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
     }
     table {
       width: 100%;
       border-collapse: collapse;
     }
     th, td {
-      padding: 0.75rem;
+      padding: 0.75rem 0;
       text-align: left;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
+      border-bottom: 1px dashed rgba(255,255,255,0.1);
+      font-size: 0.875rem;
     }
-    th { color: #888; font-weight: 500; }
-    .refresh-note {
-      text-align: center;
-      color: #666;
-      font-size: 0.85rem;
-      margin-top: 2rem;
+    th {
+      color: #71717a;
+      font-weight: 400;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td {
+      color: #a1a1aa;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    td:first-child { color: #fff; font-family: 'Inter', sans-serif; font-weight: 300; }
+    tr:last-child td { border-bottom: none; }
+
+    /* Footer - BlockRun style */
+    .footer {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 1.5rem;
+      margin-top: 1rem;
+    }
+    .footer-content {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+    }
+    .footer-links a {
+      color: #71717a;
+      text-decoration: none;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: #fff; }
+    .footer-links svg { width: 16px; height: 16px; }
+    .footer-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: #a1a1aa;
+      font-size: 0.75rem;
+    }
+    .footer-meta a {
+      color: #71717a;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-meta a:hover { color: #fff; }
+    .footer-meta .sep { color: #52525b; }
+
+    @media (max-width: 640px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .footer-content { flex-direction: column; align-items: flex-start; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>ClawRouter Dashboard</h1>
-    <p>Smart LLM Routing Analytics • ${stats.period}</p>
-  </div>
+  <div class="container">
+    <header class="header">
+      <h1>ClawRouter Dashboard</h1>
+      <p>Smart LLM routing analytics &bull; ${stats.period}</p>
+    </header>
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="value">${stats.totalRequests.toLocaleString()}</div>
-      <div class="label">Total Requests</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Total Requests</div>
+        <div class="value">${stats.totalRequests.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Actual Cost</div>
+        <div class="value">$${stats.totalCost.toFixed(2)}</div>
+      </div>
+      <div class="stat-card highlight">
+        <div class="label">Total Saved</div>
+        <div class="value">$${stats.totalSavings.toFixed(2)}</div>
+      </div>
+      <div class="stat-card highlight">
+        <div class="label">Savings Rate</div>
+        <div class="value">${stats.savingsPercentage.toFixed(1)}%</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Avg Latency</div>
+        <div class="value">${stats.avgLatencyMs.toFixed(0)}ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Per 1K Requests</div>
+        <div class="value">$${(stats.avgCostPerRequest * 1000).toFixed(2)}</div>
+      </div>
     </div>
-    <div class="stat-card">
-      <div class="value">$${stats.totalCost.toFixed(2)}</div>
-      <div class="label">Total Cost</div>
-    </div>
-    <div class="stat-card savings">
-      <div class="value">$${stats.totalSavings.toFixed(2)}</div>
-      <div class="label">Total Saved</div>
-    </div>
-    <div class="stat-card savings">
-      <div class="value">${stats.savingsPercentage.toFixed(1)}%</div>
-      <div class="label">Savings Rate</div>
-    </div>
-    <div class="stat-card">
-      <div class="value">${stats.avgLatencyMs.toFixed(0)}ms</div>
-      <div class="label">Avg Latency</div>
-    </div>
-    <div class="stat-card">
-      <div class="value">$${(stats.avgCostPerRequest * 1000).toFixed(2)}</div>
-      <div class="label">Cost per 1K Requests</div>
-    </div>
-  </div>
 
-  <div class="charts-grid">
-    <div class="chart-card">
-      <h3>Routing by Tier</h3>
-      <canvas id="tierChart"></canvas>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="section-label">Routing by Tier</div>
+        <canvas id="tierChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="section-label">Cost Benchmark: ClawRouter vs Claude Opus 4</div>
+        <canvas id="dailyChart"></canvas>
+      </div>
     </div>
-    <div class="chart-card">
-      <h3>Daily Cost vs Savings</h3>
-      <canvas id="dailyChart"></canvas>
+
+    <div class="table-section">
+      <div class="section-label">Top Models by Usage</div>
+      <table>
+        <thead>
+          <tr><th>Model</th><th>Requests</th><th>Cost</th></tr>
+        </thead>
+        <tbody>
+          ${modelData.map((m) => `<tr><td>${m.model}</td><td>${m.count}</td><td>$${m.cost}</td></tr>`).join("")}
+        </tbody>
+      </table>
     </div>
-  </div>
 
-  <div class="table-card">
-    <h3>Top Models by Usage</h3>
-    <table>
-      <thead>
-        <tr><th>Model</th><th>Requests</th><th>Cost</th></tr>
-      </thead>
-      <tbody>
-        ${modelData.map((m) => `<tr><td>${m.model}</td><td>${m.count}</td><td>$${m.cost}</td></tr>`).join("")}
-      </tbody>
-    </table>
+    <footer class="footer">
+      <div class="footer-content">
+        <div class="footer-links">
+          <a href="https://blockrun.ai" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            blockrun.ai
+          </a>
+          <a href="https://x.com/BlockRunAI" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            @BlockRunAI
+          </a>
+          <a href="https://github.com/OpenClaw/ClawRouter" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            GitHub
+          </a>
+        </div>
+        <div class="footer-meta">
+          <span>Powered by</span>
+          <a href="https://github.com/coinbase/x402" target="_blank" rel="noopener noreferrer">x402</a>
+          <span class="sep">&bull;</span>
+          <a href="https://base.org" target="_blank" rel="noopener noreferrer">Base</a>
+          <span class="sep">&bull;</span>
+          <span>USDC</span>
+        </div>
+      </div>
+    </footer>
   </div>
-
-  <p class="refresh-note">Auto-refreshes every 30 seconds • Data from usage logs</p>
 
   <script>
     const tierData = ${JSON.stringify(tierData)};
     const dailyData = ${JSON.stringify(dailyData)};
 
-    // Tier pie chart
+    // Tier doughnut chart
     new Chart(document.getElementById('tierChart'), {
       type: 'doughnut',
       data: {
         labels: tierData.map(d => d.tier),
         datasets: [{
           data: tierData.map(d => d.count),
-          backgroundColor: ['#3498db', '#f39c12', '#e74c3c', '#9b59b6'],
+          backgroundColor: ['#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'],
           borderWidth: 0
         }]
       },
       options: {
+        responsive: true,
         plugins: {
           legend: {
             position: 'right',
-            labels: { color: '#fff' }
+            labels: {
+              color: '#a1a1aa',
+              font: { family: "'JetBrains Mono', monospace", size: 11 },
+              padding: 12
+            }
           }
         }
       }
     });
 
-    // Daily bar chart
+    // Benchmark comparison bar chart
     new Chart(document.getElementById('dailyChart'), {
       type: 'bar',
       data: {
         labels: dailyData.map(d => d.date.slice(5)),
         datasets: [
           {
-            label: 'Cost',
-            data: dailyData.map(d => parseFloat(d.cost)),
-            backgroundColor: '#e74c3c'
+            label: 'Claude Opus 4 (baseline)',
+            data: dailyData.map(d => parseFloat(d.baseline)),
+            backgroundColor: '#ef4444',
+            borderRadius: 3
           },
           {
-            label: 'Saved',
-            data: dailyData.map(d => parseFloat(d.saved)),
-            backgroundColor: '#2ecc71'
+            label: 'ClawRouter (actual)',
+            data: dailyData.map(d => parseFloat(d.clawRouter)),
+            backgroundColor: '#22c55e',
+            borderRadius: 3
           }
         ]
       },
       options: {
+        responsive: true,
         scales: {
-          x: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-          y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+          x: {
+            ticks: { color: '#71717a', font: { family: "'JetBrains Mono', monospace", size: 10 } },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          },
+          y: {
+            ticks: {
+              color: '#71717a',
+              font: { family: "'JetBrains Mono', monospace", size: 10 },
+              callback: function(value) { return '$' + value; }
+            },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }
         },
         plugins: {
-          legend: { labels: { color: '#fff' } }
+          legend: {
+            labels: {
+              color: '#a1a1aa',
+              font: { family: "'JetBrains Mono', monospace", size: 11 },
+              padding: 12
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return context.dataset.label + ': $' + context.parsed.y.toFixed(4);
+              }
+            }
+          }
         }
       }
     });
 
-    // Auto-refresh
+    // Auto-refresh every 30 seconds
     setTimeout(() => location.reload(), 30000);
   </script>
 </body>

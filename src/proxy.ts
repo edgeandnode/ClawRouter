@@ -1098,8 +1098,8 @@ async function proxyRequest(
             model?: string;
             choices?: Array<{
               index?: number;
-              message?: { role?: string; content?: string };
-              delta?: { role?: string; content?: string };
+              message?: { role?: string; content?: string; tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }> };
+              delta?: { role?: string; content?: string; tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }> };
               finish_reason?: string | null;
             }>;
             usage?: unknown;
@@ -1140,6 +1140,18 @@ async function proxyRequest(
                 const contentData = `data: ${JSON.stringify(contentChunk)}\n\n`;
                 res.write(contentData);
                 responseChunks.push(Buffer.from(contentData));
+              }
+
+              // Chunk 2b: tool_calls (forward tool calls from upstream)
+              const toolCalls = choice.message?.tool_calls ?? choice.delta?.tool_calls;
+              if (toolCalls && toolCalls.length > 0) {
+                const toolCallChunk = {
+                  ...baseChunk,
+                  choices: [{ index, delta: { tool_calls: toolCalls }, finish_reason: null }],
+                };
+                const toolCallData = `data: ${JSON.stringify(toolCallChunk)}\n\n`;
+                res.write(toolCallData);
+                responseChunks.push(Buffer.from(toolCallData));
               }
 
               // Chunk 3: finish_reason (signals completion)

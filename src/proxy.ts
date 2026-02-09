@@ -42,12 +42,7 @@ import { RequestDeduplicator } from "./dedup.js";
 import { BalanceMonitor } from "./balance.js";
 import { InsufficientFundsError, EmptyWalletError } from "./errors.js";
 import { USER_AGENT } from "./version.js";
-import {
-  SessionStore,
-  getSessionId,
-  DEFAULT_SESSION_CONFIG,
-  type SessionConfig,
-} from "./session.js";
+import { SessionStore, getSessionId, type SessionConfig } from "./session.js";
 
 const BLOCKRUN_API = "https://blockrun.ai/api";
 const AUTO_MODEL = "blockrun/auto";

@@ -70,107 +70,174 @@ function isCompletionMode(): boolean {
 /**
  * Inject BlockRun models config into OpenClaw config file.
  * This is required because registerProvider() alone doesn't make models available.
+ *
+ * CRITICAL: This function must be idempotent and handle ALL edge cases:
+ * - Config file doesn't exist (create it)
+ * - Config file exists but is empty/invalid (reinitialize)
+ * - blockrun provider exists but has undefined fields (fix them)
+ * - Config exists but uses old port/models (update them)
+ *
+ * This function is called on EVERY plugin load to ensure config is always correct.
  */
 function injectModelsConfig(logger: { info: (msg: string) => void }): void {
-  const configPath = join(homedir(), ".openclaw", "openclaw.json");
-  if (!existsSync(configPath)) {
-    logger.info("OpenClaw config not found, skipping models injection");
-    return;
+  const configDir = join(homedir(), ".openclaw");
+  const configPath = join(configDir, "openclaw.json");
+
+  let config: Record<string, unknown> = {};
+  let needsWrite = false;
+
+  // Create config directory if it doesn't exist
+  if (!existsSync(configDir)) {
+    try {
+      mkdirSync(configDir, { recursive: true });
+      logger.info("Created OpenClaw config directory");
+    } catch (err) {
+      logger.info(`Failed to create config dir: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
   }
 
-  try {
-    const config = JSON.parse(readFileSync(configPath, "utf-8"));
-
-    // Track if we need to write
-    let needsWrite = false;
-
-    // Inject models config if not present
-    if (!config.models) config.models = {};
-    if (!config.models.providers) config.models.providers = {};
-
-    const proxyPort = getProxyPort();
-    const expectedBaseUrl = `http://127.0.0.1:${proxyPort}/v1`;
-
-    if (!config.models.providers.blockrun) {
-      config.models.providers.blockrun = {
-        baseUrl: expectedBaseUrl,
-        api: "openai-completions",
-        // apiKey is required by pi-coding-agent's ModelRegistry for providers with models.
-        // We use a placeholder since the proxy handles real x402 auth internally.
-        apiKey: "x402-proxy-handles-auth",
-        models: OPENCLAW_MODELS,
-      };
-      needsWrite = true;
-    } else {
-      // Update existing config if fields are missing or outdated
-      // Fix: explicitly check for undefined/missing fields
-      if (!config.models.providers.blockrun.baseUrl || config.models.providers.blockrun.baseUrl !== expectedBaseUrl) {
-        config.models.providers.blockrun.baseUrl = expectedBaseUrl;
+  // Load existing config or create new one
+  if (existsSync(configPath)) {
+    try {
+      const content = readFileSync(configPath, "utf-8").trim();
+      if (content) {
+        config = JSON.parse(content);
+      } else {
+        logger.info("OpenClaw config is empty, initializing");
         needsWrite = true;
       }
-      // Ensure api field is present
-      if (!config.models.providers.blockrun.api) {
-        config.models.providers.blockrun.api = "openai-completions";
-        needsWrite = true;
-      }
-      // Ensure apiKey is present (required by ModelRegistry for /model picker)
-      if (!config.models.providers.blockrun.apiKey) {
-        config.models.providers.blockrun.apiKey = "x402-proxy-handles-auth";
-        needsWrite = true;
-      }
-      // Always refresh models list (ensures new aliases are available)
-      const currentModels = config.models.providers.blockrun.models as unknown[];
-      if (!currentModels || currentModels.length !== OPENCLAW_MODELS.length) {
-        config.models.providers.blockrun.models = OPENCLAW_MODELS;
-        needsWrite = true;
-      }
-    }
-
-    // Set blockrun/auto as default model for smart routing
-    if (!config.agents) config.agents = {};
-    if (!config.agents.defaults) config.agents.defaults = {};
-    if (!config.agents.defaults.model) config.agents.defaults.model = {};
-    if (config.agents.defaults.model.primary !== "blockrun/auto") {
-      config.agents.defaults.model.primary = "blockrun/auto";
+    } catch (err) {
+      logger.info(`Failed to parse config (will recreate): ${err instanceof Error ? err.message : String(err)}`);
+      config = {};
       needsWrite = true;
     }
+  } else {
+    logger.info("OpenClaw config not found, creating");
+    needsWrite = true;
+  }
 
-    // Add key model aliases to allowlist for /model picker visibility
-    // Only add essential aliases, not all 50+ models to avoid config pollution
-    const KEY_MODEL_ALIASES = [
-      { id: "auto", alias: "auto" },
-      { id: "free", alias: "free" },
-      { id: "sonnet", alias: "sonnet" },
-      { id: "opus", alias: "opus" },
-      { id: "haiku", alias: "haiku" },
-      { id: "grok", alias: "grok" },
-      { id: "deepseek", alias: "deepseek" },
-      { id: "kimi", alias: "kimi" },
-      { id: "gemini", alias: "gemini" },
-      { id: "flash", alias: "flash" },
-      { id: "gpt", alias: "gpt" },
-      { id: "reasoner", alias: "reasoner" },
-    ];
+  // Initialize config structure
+  if (!config.models) {
+    config.models = {};
+    needsWrite = true;
+  }
+  const models = config.models as Record<string, unknown>;
+  if (!models.providers) {
+    models.providers = {};
+    needsWrite = true;
+  }
 
-    if (!config.agents) config.agents = {};
-    if (!config.agents.defaults) config.agents.defaults = {};
-    if (!config.agents.defaults.models) config.agents.defaults.models = {};
+  const proxyPort = getProxyPort();
+  const expectedBaseUrl = `http://127.0.0.1:${proxyPort}/v1`;
 
-    const allowlist = config.agents.defaults.models as Record<string, unknown>;
-    for (const m of KEY_MODEL_ALIASES) {
-      const fullId = `blockrun/${m.id}`;
-      if (!allowlist[fullId]) {
-        allowlist[fullId] = { alias: m.alias };
-        needsWrite = true;
-      }
+  const providers = models.providers as Record<string, unknown>;
+
+  if (!providers.blockrun) {
+    // Create new blockrun provider config
+    providers.blockrun = {
+      baseUrl: expectedBaseUrl,
+      api: "openai-completions",
+      // apiKey is required by pi-coding-agent's ModelRegistry for providers with models.
+      // We use a placeholder since the proxy handles real x402 auth internally.
+      apiKey: "x402-proxy-handles-auth",
+      models: OPENCLAW_MODELS,
+    };
+    logger.info("Injected BlockRun provider config");
+    needsWrite = true;
+  } else {
+    // Validate and fix existing blockrun config
+    const blockrun = providers.blockrun as Record<string, unknown>;
+    let fixed = false;
+
+    // Fix: explicitly check for undefined/missing fields
+    if (!blockrun.baseUrl || blockrun.baseUrl !== expectedBaseUrl) {
+      blockrun.baseUrl = expectedBaseUrl;
+      fixed = true;
+    }
+    // Ensure api field is present
+    if (!blockrun.api) {
+      blockrun.api = "openai-completions";
+      fixed = true;
+    }
+    // Ensure apiKey is present (required by ModelRegistry for /model picker)
+    if (!blockrun.apiKey) {
+      blockrun.apiKey = "x402-proxy-handles-auth";
+      fixed = true;
+    }
+    // Always refresh models list (ensures new aliases are available)
+    const currentModels = blockrun.models as unknown[];
+    if (!currentModels || !Array.isArray(currentModels) || currentModels.length !== OPENCLAW_MODELS.length) {
+      blockrun.models = OPENCLAW_MODELS;
+      fixed = true;
     }
 
-    if (needsWrite) {
+    if (fixed) {
+      logger.info("Fixed incomplete BlockRun provider config");
+      needsWrite = true;
+    }
+  }
+
+  // Set blockrun/auto as default model for smart routing
+  if (!config.agents) {
+    config.agents = {};
+    needsWrite = true;
+  }
+  const agents = config.agents as Record<string, unknown>;
+  if (!agents.defaults) {
+    agents.defaults = {};
+    needsWrite = true;
+  }
+  const defaults = agents.defaults as Record<string, unknown>;
+  if (!defaults.model) {
+    defaults.model = {};
+    needsWrite = true;
+  }
+  const model = defaults.model as Record<string, unknown>;
+  if (model.primary !== "blockrun/auto") {
+    model.primary = "blockrun/auto";
+    needsWrite = true;
+  }
+
+  // Add key model aliases to allowlist for /model picker visibility
+  // Only add essential aliases, not all 50+ models to avoid config pollution
+  const KEY_MODEL_ALIASES = [
+    { id: "auto", alias: "auto" },
+    { id: "free", alias: "free" },
+    { id: "sonnet", alias: "sonnet" },
+    { id: "opus", alias: "opus" },
+    { id: "haiku", alias: "haiku" },
+    { id: "grok", alias: "grok" },
+    { id: "deepseek", alias: "deepseek" },
+    { id: "kimi", alias: "kimi" },
+    { id: "gemini", alias: "gemini" },
+    { id: "flash", alias: "flash" },
+    { id: "gpt", alias: "gpt" },
+    { id: "reasoner", alias: "reasoner" },
+  ];
+
+  if (!defaults.models) {
+    defaults.models = {};
+    needsWrite = true;
+  }
+
+  const allowlist = defaults.models as Record<string, unknown>;
+  for (const m of KEY_MODEL_ALIASES) {
+    const fullId = `blockrun/${m.id}`;
+    if (!allowlist[fullId]) {
+      allowlist[fullId] = { alias: m.alias };
+      needsWrite = true;
+    }
+  }
+
+  // Write config file if any changes were made
+  if (needsWrite) {
+    try {
       writeFileSync(configPath, JSON.stringify(config, null, 2));
       logger.info("Smart routing enabled (blockrun/auto)");
+    } catch (err) {
+      logger.info(`Failed to write config: ${err instanceof Error ? err.message : String(err)}`);
     }
-  } catch {
-    // Silently fail — config injection is best-effort
   }
 }
 

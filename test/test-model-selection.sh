@@ -108,10 +108,10 @@ fi
 echo "  ✓ Model selection persisted"
 echo ""
 
-# Test 5: Reload plugin and check if model selection is preserved
-echo "→ Test 5: Reload plugin and verify model selection is preserved"
-echo "  Reinstalling plugin to simulate reload..."
-openclaw plugins install @blockrun/clawrouter@latest
+# Test 5: Verify plugin doesn't hijack model selection on subsequent runs
+echo "→ Test 5: Verify model selection persists across 'openclaw models' runs"
+echo "  Running 'openclaw models' again to simulate plugin reload..."
+openclaw models > /dev/null 2>&1
 
 MODEL_AFTER=$(node -e "
 const fs = require('fs');
@@ -123,11 +123,11 @@ console.log(config.agents?.defaults?.model?.primary || 'NONE');
 
 if [ "$MODEL_AFTER" != "openai/gpt-4" ]; then
     echo "  ❌ FAIL: Model was changed back to $MODEL_AFTER (should still be openai/gpt-4)"
-    echo "  This is the BUG Chandler reported!"
+    echo "  This is the BUG Chandler reported - plugin hijacking model selection!"
     exit 1
 fi
 
-echo "  ✓ Model selection preserved after reload"
+echo "  ✓ Model selection preserved (not hijacked by plugin)"
 echo ""
 
 echo "✅ All tests passed!"

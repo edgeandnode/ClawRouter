@@ -30,6 +30,7 @@ import {
   route,
   getFallbackChain,
   getFallbackChainFiltered,
+  calculateModelCost,
   DEFAULT_ROUTING_CONFIG,
   type RouterOptions,
   type RoutingDecision,
@@ -1482,11 +1483,22 @@ async function proxyRequest(
     }
 
     // Update routing decision with actual model used (for logging)
+    // IMPORTANT: Recalculate cost for the actual model, not the original primary
     if (routingDecision && actualModelUsed !== routingDecision.model) {
+      const estimatedInputTokens = Math.ceil(body.length / 4);
+      const newCosts = calculateModelCost(
+        actualModelUsed,
+        routerOpts.modelPricing,
+        estimatedInputTokens,
+        maxTokens,
+      );
       routingDecision = {
         ...routingDecision,
         model: actualModelUsed,
         reasoning: `${routingDecision.reasoning} | fallback to ${actualModelUsed}`,
+        costEstimate: newCosts.costEstimate,
+        baselineCost: newCosts.baselineCost,
+        savings: newCosts.savings,
       };
       options.onRouted?.(routingDecision);
     }
@@ -1754,14 +1766,27 @@ async function proxyRequest(
   }
 
   // --- Usage logging (fire-and-forget) ---
+  // Note: Recalculate cost using full body length (not just system+user message)
+  // and apply 20% buffer to match actual x402 payment (see estimateAmount())
   if (routingDecision) {
+    // Use full body length for accurate cost (matches x402 payment estimation)
+    const estimatedInputTokens = Math.ceil(body.length / 4);
+    const accurateCosts = calculateModelCost(
+      routingDecision.model,
+      routerOpts.modelPricing,
+      estimatedInputTokens,
+      maxTokens,
+    );
+    // Apply 20% buffer to match x402 pre-auth
+    const costWithBuffer = accurateCosts.costEstimate * 1.2;
+    const baselineWithBuffer = accurateCosts.baselineCost * 1.2;
     const entry: UsageEntry = {
       timestamp: new Date().toISOString(),
       model: routingDecision.model,
       tier: routingDecision.tier,
-      cost: routingDecision.costEstimate,
-      baselineCost: routingDecision.baselineCost,
-      savings: routingDecision.savings,
+      cost: costWithBuffer,
+      baselineCost: baselineWithBuffer,
+      savings: accurateCosts.savings,
       latencyMs: Date.now() - startTime,
     };
     logUsage(entry).catch(() => {});

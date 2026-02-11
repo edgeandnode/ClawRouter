@@ -64,6 +64,35 @@ export function getFallbackChain(tier: Tier, tierConfigs: Record<Tier, TierConfi
 }
 
 /**
+ * Calculate cost for a specific model (used when fallback model is used).
+ * Returns updated cost fields for RoutingDecision.
+ */
+export function calculateModelCost(
+  model: string,
+  modelPricing: Map<string, ModelPricing>,
+  estimatedInputTokens: number,
+  maxOutputTokens: number,
+): { costEstimate: number; baselineCost: number; savings: number } {
+  const pricing = modelPricing.get(model);
+
+  const inputCost = pricing ? (estimatedInputTokens / 1_000_000) * pricing.inputPrice : 0;
+  const outputCost = pricing ? (maxOutputTokens / 1_000_000) * pricing.outputPrice : 0;
+  const costEstimate = inputCost + outputCost;
+
+  // Baseline: what Claude Opus would cost
+  const opusPricing = modelPricing.get("anthropic/claude-opus-4");
+  const baselineInput = opusPricing
+    ? (estimatedInputTokens / 1_000_000) * opusPricing.inputPrice
+    : 0;
+  const baselineOutput = opusPricing ? (maxOutputTokens / 1_000_000) * opusPricing.outputPrice : 0;
+  const baselineCost = baselineInput + baselineOutput;
+
+  const savings = baselineCost > 0 ? Math.max(0, (baselineCost - costEstimate) / baselineCost) : 0;
+
+  return { costEstimate, baselineCost, savings };
+}
+
+/**
  * Get the fallback chain filtered by context length.
  * Only returns models that can handle the estimated total context.
  *

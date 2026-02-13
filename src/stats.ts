@@ -9,6 +9,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { UsageEntry } from "./logger.js";
+import { VERSION } from "./version.js";
 
 const LOG_DIR = join(homedir(), ".openclaw", "blockrun", "logs");
 
@@ -215,7 +216,7 @@ export function formatStatsAscii(stats: AggregatedStats): string {
 
   // Header
   lines.push("╔════════════════════════════════════════════════════════════╗");
-  lines.push("║          ClawRouter by BlockRun v0.8.20                    ║");
+  lines.push(`║          ClawRouter by BlockRun v${VERSION}`.padEnd(61) + "║");
   lines.push("║                Usage Statistics                            ║");
   lines.push("╠════════════════════════════════════════════════════════════╣");
 

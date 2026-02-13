@@ -53,11 +53,11 @@ import { BalanceMonitor } from "./balance.js";
 import { USER_AGENT } from "./version.js";
 import { SessionStore, getSessionId, type SessionConfig } from "./session.js";
 import { checkForUpdates } from "./updater.js";
+import { PROXY_PORT } from "./config.js";
 
 const BLOCKRUN_API = "https://blockrun.ai/api";
 // Routing profile models - virtual models that trigger intelligent routing
 const AUTO_MODEL = "blockrun/auto";
-const AUTO_MODEL_SHORT = "auto"; // OpenClaw strips provider prefix
 
 const ROUTING_PROFILES = new Set([
   "blockrun/free",
@@ -72,24 +72,6 @@ const ROUTING_PROFILES = new Set([
 const FREE_MODEL = "nvidia/gpt-oss-120b"; // Free model for empty wallet fallback
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000; // 3 minutes (allows for on-chain tx + LLM response)
-const DEFAULT_PORT = 8402;
-
-/**
- * Proxy port configuration - resolved once at module load.
- * Reads BLOCKRUN_PROXY_PORT env var or defaults to 8402.
- * Separated from network code to avoid security scanner false positives.
- */
-const PROXY_PORT = (() => {
-  const envPort = process.env.BLOCKRUN_PROXY_PORT;
-  if (envPort) {
-    const parsed = parseInt(envPort, 10);
-    if (!isNaN(parsed) && parsed > 0 && parsed < 65536) {
-      return parsed;
-    }
-  }
-  return DEFAULT_PORT;
-})();
-
 const MAX_FALLBACK_ATTEMPTS = 3; // Maximum models to try in fallback chain
 const HEALTH_CHECK_TIMEOUT_MS = 2_000; // Timeout for checking existing proxy
 const RATE_LIMIT_COOLDOWN_MS = 60_000; // 60 seconds cooldown for rate-limited models

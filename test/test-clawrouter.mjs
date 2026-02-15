@@ -283,25 +283,30 @@ test("Savings is between 0 and 1", () => {
 
 console.log("\n═══ Model Selection ═══\n");
 
-test("SIMPLE tier selects a cheap model", () => {
+test("SIMPLE tier selects configured primary model", () => {
   const result = route("What is 2+2?", undefined, 100, {
     config: DEFAULT_ROUTING_CONFIG,
     modelPricing,
   });
-  // SIMPLE tier should select a cost-effective model (deepseek or gemini-flash)
-  assertTrue(
-    result.model.includes("deepseek") || result.model.includes("gemini"),
-    `Got ${result.model}`,
+  assertEqual(result.tier, "SIMPLE", `Got ${result.tier}`);
+  assertEqual(
+    result.model,
+    DEFAULT_ROUTING_CONFIG.tiers.SIMPLE.primary,
+    `Unexpected SIMPLE model.`,
   );
 });
 
-test("REASONING tier selects grok-4-fast-reasoning", () => {
+test("REASONING tier selects configured primary model", () => {
   const result = route("Prove sqrt(2) is irrational step by step", undefined, 100, {
     config: DEFAULT_ROUTING_CONFIG,
     modelPricing,
   });
-  // REASONING tier now uses grok-4-fast-reasoning as primary (ultra-cheap $0.20/$0.50)
-  assertTrue(result.model.includes("grok-4-fast-reasoning"), `Got ${result.model}`);
+  assertEqual(result.tier, "REASONING", `Got ${result.tier}`);
+  assertEqual(
+    result.model,
+    DEFAULT_ROUTING_CONFIG.tiers.REASONING.primary,
+    `Unexpected REASONING model.`,
+  );
 });
 
 console.log("\n═══ Edge Cases ═══\n");

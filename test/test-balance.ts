@@ -10,7 +10,7 @@
  *   npx tsx test-balance.ts
  */
 
-import { BalanceMonitor, BALANCE_THRESHOLDS, type BalanceInfo } from "./src/balance.js";
+import { BalanceMonitor, BALANCE_THRESHOLDS, type BalanceInfo } from "../src/balance.js";
 import {
   InsufficientFundsError,
   EmptyWalletError,
@@ -19,7 +19,7 @@ import {
   isEmptyWalletError,
   isBalanceError,
   isRpcError,
-} from "./src/errors.js";
+} from "../src/errors.js";
 
 let passed = 0;
 let failed = 0;

@@ -13,7 +13,7 @@
  *   npx tsx test-retry.ts
  */
 
-import { fetchWithRetry, isRetryable, DEFAULT_RETRY_CONFIG } from "./src/retry.js";
+import { fetchWithRetry, isRetryable, DEFAULT_RETRY_CONFIG } from "../src/retry.js";
 
 let passed = 0;
 let failed = 0;

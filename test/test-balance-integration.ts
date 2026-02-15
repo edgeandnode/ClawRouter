@@ -13,8 +13,8 @@
  */
 
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
-import { startProxy } from "./src/proxy.js";
-import { isEmptyWalletError, isInsufficientFundsError, isBalanceError } from "./src/errors.js";
+import { startProxy } from "../src/proxy.js";
+import { isEmptyWalletError, isInsufficientFundsError, isBalanceError } from "../src/errors.js";
 
 let passed = 0;
 let failed = 0;

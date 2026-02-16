@@ -784,3 +784,5 @@ export { getStats, formatStatsAscii } from "./stats.js";
 export type { DailyStats, AggregatedStats } from "./stats.js";
 export { SessionStore, getSessionId, DEFAULT_SESSION_CONFIG } from "./session.js";
 export type { SessionEntry, SessionConfig } from "./session.js";
+export { ResponseCache } from "./response-cache.js";
+export type { CachedLLMResponse, ResponseCacheConfig } from "./response-cache.js";

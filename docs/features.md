@@ -4,6 +4,7 @@ ClawRouter v0.5+ includes intelligent routing features that work automatically.
 
 ## Table of Contents
 
+- [Response Cache](#response-cache)
 - [Agentic Auto-Detection](#agentic-auto-detection)
 - [Tool Detection](#tool-detection)
 - [Context-Length-Aware Routing](#context-length-aware-routing)
@@ -11,6 +12,85 @@ ClawRouter v0.5+ includes intelligent routing features that work automatically.
 - [Free Tier Fallback](#free-tier-fallback)
 - [Session Persistence](#session-persistence)
 - [Cost Tracking with /stats](#cost-tracking-with-stats)
+
+---
+
+## Response Cache
+
+ClawRouter includes LLM response caching inspired by LiteLLM's caching system. Identical requests return cached responses, saving both cost and latency.
+
+**How it works:**
+
+```
+Request: "What is 2+2?"
+  First call:  → API ($0.001) → Cache response
+  Second call: → Cache HIT → Return instantly ($0)
+```
+
+**Features:**
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| TTL | 10 minutes | Responses expire after TTL |
+| Max size | 200 entries | LRU eviction when full |
+| Item limit | 1MB | Large responses skipped |
+| Auto-enabled | Yes | No config needed |
+
+**Cache key generation:**
+
+The cache key is a SHA-256 hash of the request body (model + messages + params), with normalization:
+- Message timestamps stripped (OpenClaw injects `[Mon 2024-01-15 10:30 UTC]`)
+- Keys sorted for consistent hashing
+- Stream mode, user, and request_id fields excluded
+
+**Bypass cache:**
+
+```typescript
+// Via header
+fetch("/v1/chat/completions", {
+  headers: { "Cache-Control": "no-cache" }
+})
+
+// Via body
+{
+  "model": "blockrun/auto",
+  "cache": false,  // or "no_cache": true
+  "messages": [...]
+}
+```
+
+**Check cache stats:**
+
+```bash
+curl http://localhost:8402/cache
+```
+
+Response:
+```json
+{
+  "size": 42,
+  "maxSize": 200,
+  "hits": 156,
+  "misses": 89,
+  "evictions": 3,
+  "hitRate": "63.7%"
+}
+```
+
+**Configuration:**
+
+Response caching is enabled by default with sensible defaults. For advanced tuning, the cache can be configured programmatically:
+
+```typescript
+import { ResponseCache } from "@blockrun/clawrouter";
+
+const cache = new ResponseCache({
+  maxSize: 500,        // Max cached responses
+  defaultTTL: 300,     // 5 minutes
+  maxItemSize: 2_097_152, // 2MB max per item
+  enabled: true
+});
+```
 
 ---
 

@@ -46,6 +46,7 @@ import {
 import { logUsage, type UsageEntry } from "./logger.js";
 import { getStats } from "./stats.js";
 import { RequestDeduplicator } from "./dedup.js";
+import { ResponseCache, type ResponseCacheConfig } from "./response-cache.js";
 import { BalanceMonitor } from "./balance.js";
 import { compressContext, shouldCompress, type NormalizedMessage } from "./compression/index.js";
 // Error classes available for programmatic use but not used in proxy
@@ -693,6 +694,12 @@ export type ProxyOptions = {
    * Set to 0 to compress all requests.
    */
   compressionThresholdKB?: number;
+  /**
+   * Response caching config. When enabled, identical requests return
+   * cached responses instead of making new API calls.
+   * Default: enabled with 10 minute TTL, 200 max entries.
+   */
+  cacheConfig?: ResponseCacheConfig;
   onReady?: (port: number) => void;
   onError?: (error: Error) => void;
   onPayment?: (info: { model: string; amount: string; network: string }) => void;
@@ -824,6 +831,9 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   // Request deduplicator (shared across all requests)
   const deduplicator = new RequestDeduplicator();
 
+  // Response cache for identical requests (longer TTL than dedup)
+  const responseCache = new ResponseCache(options.cacheConfig);
+
   // Session store for model persistence (prevents mid-task model switching)
   const sessionStore = new SessionStore(options.sessionConfig);
 
@@ -884,6 +894,17 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
       return;
     }
 
+    // Cache stats endpoint
+    if (req.url === "/cache" || req.url?.startsWith("/cache?")) {
+      const stats = responseCache.getStats();
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+      });
+      res.end(JSON.stringify(stats, null, 2));
+      return;
+    }
+
     // Stats API endpoint - returns JSON for programmatic access
     if (req.url === "/stats" || req.url?.startsWith("/stats?")) {
       try {
@@ -938,6 +959,7 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
         deduplicator,
         balanceMonitor,
         sessionStore,
+        responseCache,
       );
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -1264,6 +1286,7 @@ async function proxyRequest(
   deduplicator: RequestDeduplicator,
   balanceMonitor: BalanceMonitor,
   sessionStore: SessionStore,
+  responseCache: ResponseCache,
 ): Promise<void> {
   const startTime = Date.now();
 
@@ -1489,10 +1512,26 @@ async function proxyRequest(
     }
   }
 
-  // --- Dedup check ---
+  // --- Response cache check (long-term, 10min TTL) ---
+  const cacheKey = ResponseCache.generateKey(body);
+  const reqHeaders: Record<string, string> = {};
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (typeof value === "string") reqHeaders[key] = value;
+  }
+  if (responseCache.shouldCache(body, reqHeaders)) {
+    const cachedResponse = responseCache.get(cacheKey);
+    if (cachedResponse) {
+      console.log(`[ClawRouter] Cache HIT for ${cachedResponse.model} (saved API call)`);
+      res.writeHead(cachedResponse.status, cachedResponse.headers);
+      res.end(cachedResponse.body);
+      return;
+    }
+  }
+
+  // --- Dedup check (short-term, 30s TTL for retries) ---
   const dedupKey = RequestDeduplicator.hash(body);
 
-  // Check completed cache first
+  // Check dedup cache (catches retries within 30s)
   const cached = deduplicator.getCached(dedupKey);
   if (cached) {
     res.writeHead(cached.status, cached.headers);
@@ -1993,13 +2032,26 @@ async function proxyRequest(
 
       res.end();
 
-      // Cache for dedup
+      const responseBody = Buffer.concat(responseChunks);
+
+      // Cache for dedup (short-term, 30s)
       deduplicator.complete(dedupKey, {
         status: upstream.status,
         headers: responseHeaders,
-        body: Buffer.concat(responseChunks),
+        body: responseBody,
         completedAt: Date.now(),
       });
+
+      // Cache for response cache (long-term, 10min) - only successful non-streaming
+      if (upstream.status === 200 && responseCache.shouldCache(body)) {
+        responseCache.set(cacheKey, {
+          body: responseBody,
+          status: upstream.status,
+          headers: responseHeaders,
+          model: modelId,
+        });
+        console.log(`[ClawRouter] Cached response for ${modelId} (${responseBody.length} bytes)`);
+      }
     }
 
     // --- Optimistic balance deduction after successful response ---

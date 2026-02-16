@@ -315,11 +315,12 @@ const decision = route("Prove sqrt(2) is irrational", ...);
 
 ---
 
-## Performance Optimizations (v0.3)
+## Performance Optimizations (v0.3+)
 
 - **SSE heartbeat**: Sends headers + heartbeat immediately, preventing upstream timeouts
 - **Response dedup**: SHA-256 hash → 30s cache, prevents double-charge on retries
 - **Payment pre-auth**: Caches 402 params, pre-signs USDC, skips 402 round trip (~200ms saved)
+- **Response cache**: LLM response caching with 10-minute TTL, saves cost on repeated queries
 
 ---
 
@@ -425,6 +426,7 @@ Your wallet key remains at `~/.openclaw/blockrun/wallet.key` — back it up befo
 - [x] Model aliases — `/model free`, `/model br-sonnet`, `/model grok`, etc.
 - [x] Free tier — gpt-oss-120b for $0 when wallet is empty
 - [x] Auto-update — startup version check with one-command update
+- [x] Response cache — LiteLLM-inspired caching for repeated requests
 - [ ] Cascade routing — try cheap model first, escalate on low quality
 - [ ] Spend controls — daily/monthly budgets
 - [ ] Remote analytics — cost tracking at blockrun.ai

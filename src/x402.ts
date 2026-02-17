@@ -15,14 +15,11 @@ import { signTypedData, privateKeyToAccount } from "viem/accounts";
 import { PaymentCache } from "./payment-cache.js";
 
 const BASE_CHAIN_ID = 8453;
-const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-
-const USDC_DOMAIN = {
-  name: "USD Coin",
-  version: "2",
-  chainId: BASE_CHAIN_ID,
-  verifyingContract: USDC_BASE,
-} as const;
+const BASE_SEPOLIA_CHAIN_ID = 84532;
+const DEFAULT_TOKEN_NAME = "USD Coin";
+const DEFAULT_TOKEN_VERSION = "2";
+const DEFAULT_NETWORK = "eip155:8453";
+const DEFAULT_MAX_TIMEOUT_SECONDS = 300;
 
 const TRANSFER_TYPES = {
   TransferWithAuthorization: [
@@ -59,31 +56,110 @@ interface PaymentRequired {
   resource?: { url?: string; description?: string };
 }
 
+function decodeBase64Json<T>(value: string): T {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = (4 - (normalized.length % 4)) % 4;
+  const padded = normalized + "=".repeat(padding);
+  const decoded = Buffer.from(padded, "base64").toString("utf8");
+  return JSON.parse(decoded) as T;
+}
+
+function encodeBase64Json(value: unknown): string {
+  return Buffer.from(JSON.stringify(value), "utf8").toString("base64");
+}
+
 function parsePaymentRequired(headerValue: string): PaymentRequired {
-  const decoded = atob(headerValue);
-  return JSON.parse(decoded) as PaymentRequired;
+  return decodeBase64Json<PaymentRequired>(headerValue);
+}
+
+function normalizeNetwork(network: string | undefined): string {
+  if (!network || network.trim().length === 0) {
+    return DEFAULT_NETWORK;
+  }
+  return network.trim().toLowerCase();
+}
+
+function resolveChainId(network: string): number {
+  const eip155Match = network.match(/^eip155:(\d+)$/i);
+  if (eip155Match) {
+    const parsed = Number.parseInt(eip155Match[1], 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  if (network === "base") return BASE_CHAIN_ID;
+  if (network === "base-sepolia") return BASE_SEPOLIA_CHAIN_ID;
+  return BASE_CHAIN_ID;
+}
+
+function parseHexAddress(value: string | undefined): `0x${string}` | undefined {
+  if (!value) return undefined;
+
+  const direct = value.match(/^0x[a-fA-F0-9]{40}$/);
+  if (direct) {
+    return direct[0] as `0x${string}`;
+  }
+
+  // Some providers send CAIP-style assets (e.g. ".../erc20:0x...").
+  const caipSuffix = value.match(/0x[a-fA-F0-9]{40}$/);
+  if (caipSuffix) {
+    return caipSuffix[0] as `0x${string}`;
+  }
+
+  return undefined;
+}
+
+function requireHexAddress(value: string | undefined, field: string): `0x${string}` {
+  const parsed = parseHexAddress(value);
+  if (!parsed) {
+    throw new Error(`Invalid ${field} in payment requirements: ${String(value)}`);
+  }
+  return parsed;
+}
+
+function setPaymentHeaders(headers: Headers, payload: string): void {
+  // Support both modern and legacy header names for compatibility.
+  headers.set("payment-signature", payload);
+  headers.set("x-payment", payload);
 }
 
 async function createPaymentPayload(
   privateKey: `0x${string}`,
   fromAddress: string,
-  recipient: string,
+  option: PaymentOption,
   amount: string,
-  resourceUrl: string,
+  requestUrl: string,
+  resource: PaymentRequired["resource"],
 ): Promise<string> {
+  const network = normalizeNetwork(option.network);
+  const chainId = resolveChainId(network);
+  const recipient = requireHexAddress(option.payTo, "payTo");
+  const verifyingContract = requireHexAddress(option.asset, "asset");
+
+  const maxTimeoutSeconds =
+    typeof option.maxTimeoutSeconds === "number" && option.maxTimeoutSeconds > 0
+      ? Math.floor(option.maxTimeoutSeconds)
+      : DEFAULT_MAX_TIMEOUT_SECONDS;
+
   const now = Math.floor(Date.now() / 1000);
   const validAfter = now - 600;
-  const validBefore = now + 300;
+  const validBefore = now + maxTimeoutSeconds;
   const nonce = createNonce();
 
   const signature = await signTypedData({
     privateKey,
-    domain: USDC_DOMAIN,
+    domain: {
+      name: option.extra?.name || DEFAULT_TOKEN_NAME,
+      version: option.extra?.version || DEFAULT_TOKEN_VERSION,
+      chainId,
+      verifyingContract,
+    },
     types: TRANSFER_TYPES,
     primaryType: "TransferWithAuthorization",
     message: {
       from: fromAddress as `0x${string}`,
-      to: recipient as `0x${string}`,
+      to: recipient,
       value: BigInt(amount),
       validAfter: BigInt(validAfter),
       validBefore: BigInt(validBefore),
@@ -94,18 +170,18 @@ async function createPaymentPayload(
   const paymentData = {
     x402Version: 2,
     resource: {
-      url: resourceUrl,
-      description: "BlockRun AI API call",
+      url: resource?.url || requestUrl,
+      description: resource?.description || "BlockRun AI API call",
       mimeType: "application/json",
     },
     accepted: {
-      scheme: "exact",
-      network: "eip155:8453",
+      scheme: option.scheme,
+      network,
       amount,
-      asset: USDC_BASE,
-      payTo: recipient,
-      maxTimeoutSeconds: 300,
-      extra: { name: "USD Coin", version: "2" },
+      asset: option.asset,
+      payTo: option.payTo,
+      maxTimeoutSeconds: option.maxTimeoutSeconds,
+      extra: option.extra,
     },
     payload: {
       signature,
@@ -121,7 +197,7 @@ async function createPaymentPayload(
     extensions: {},
   };
 
-  return btoa(JSON.stringify(paymentData));
+  return encodeBase64Json(paymentData);
 }
 
 /** Pre-auth parameters for skipping the 402 round trip. */
@@ -165,13 +241,24 @@ export function createPaymentFetch(privateKey: `0x${string}`): PaymentFetchResul
       const paymentPayload = await createPaymentPayload(
         privateKey,
         walletAddress,
-        cached.payTo,
+        {
+          scheme: cached.scheme,
+          network: cached.network,
+          asset: cached.asset,
+          payTo: cached.payTo,
+          maxTimeoutSeconds: cached.maxTimeoutSeconds,
+          extra: cached.extra,
+        },
         preAuth.estimatedAmount,
         url,
+        {
+          url: cached.resourceUrl,
+          description: cached.resourceDescription,
+        },
       );
 
       const preAuthHeaders = new Headers(init?.headers);
-      preAuthHeaders.set("payment-signature", paymentPayload);
+      setPaymentHeaders(preAuthHeaders, paymentPayload);
 
       const response = await fetch(input, { ...init, headers: preAuthHeaders });
 
@@ -243,20 +330,23 @@ export function createPaymentFetch(privateKey: `0x${string}`): PaymentFetchResul
       network: option.network,
       extra: option.extra,
       maxTimeoutSeconds: option.maxTimeoutSeconds,
+      resourceUrl: paymentRequired.resource?.url,
+      resourceDescription: paymentRequired.resource?.description,
     });
 
     // Create signed payment
     const paymentPayload = await createPaymentPayload(
       privateKey,
       walletAddress,
-      option.payTo,
+      option,
       amount,
       url,
+      paymentRequired.resource,
     );
 
     // Retry with payment
     const retryHeaders = new Headers(init?.headers);
-    retryHeaders.set("payment-signature", paymentPayload);
+    setPaymentHeaders(retryHeaders, paymentPayload);
 
     return fetch(input, {
       ...init,

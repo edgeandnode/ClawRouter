@@ -13,6 +13,8 @@ export type CachedPaymentParams = {
   network: string;
   extra?: { name?: string; version?: string };
   maxTimeoutSeconds?: number;
+  resourceUrl?: string;
+  resourceDescription?: string;
   cachedAt: number;
 };
 

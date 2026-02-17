@@ -12,7 +12,7 @@ import { startProxy } from "../dist/index.js";
 
 const TEST_WALLET_KEY =
   process.env.BLOCKRUN_WALLET_KEY ||
-  "0xd786859744b4a2a9a6dd99139785d9f9d5631c7d0c3b3bfdf1b7108dd8a6e5b8";
+  "0x" + "a".repeat(64); // Placeholder - set BLOCKRUN_WALLET_KEY for real tests
 
 const TEST_PORT = 8498;
 

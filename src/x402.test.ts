@@ -169,27 +169,29 @@ describe("x402 payment payload compatibility", () => {
 
     let callCount = 0;
     let preAuthHeaders: Headers | undefined;
-    const fetchMock = vi.fn().mockImplementation(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      callCount += 1;
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        callCount += 1;
 
-      if (callCount === 1) {
-        return new Response("payment required", {
-          status: 402,
-          headers: { "x-payment-required": encodeBase64Json(paymentRequired) },
-        });
-      }
+        if (callCount === 1) {
+          return new Response("payment required", {
+            status: 402,
+            headers: { "x-payment-required": encodeBase64Json(paymentRequired) },
+          });
+        }
 
-      if (callCount === 2) {
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
-      }
+        if (callCount === 2) {
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
 
-      if (callCount === 3) {
-        preAuthHeaders = new Headers(init?.headers);
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
-      }
+        if (callCount === 3) {
+          preAuthHeaders = new Headers(init?.headers);
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
 
-      throw new Error(`Unexpected fetch call #${callCount}`);
-    });
+        throw new Error(`Unexpected fetch call #${callCount}`);
+      });
 
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 

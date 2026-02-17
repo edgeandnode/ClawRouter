@@ -255,7 +255,7 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
     { id: "opus", alias: "br-opus" },
     { id: "haiku", alias: "br-haiku" },
     { id: "gpt5", alias: "gpt5" },
-    { id: "mini", alias: "mini" },
+    { id: "codex", alias: "codex" },
     { id: "grok-fast", alias: "grok-fast" },
     { id: "grok-code", alias: "grok-code" },
     { id: "deepseek", alias: "deepseek" },

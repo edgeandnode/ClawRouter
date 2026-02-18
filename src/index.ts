@@ -201,15 +201,23 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
       blockrun.apiKey = "x402-proxy-handles-auth";
       fixed = true;
     }
-    // Always refresh models list (ensures new aliases are available)
-    const currentModels = blockrun.models as unknown[];
-    if (
+    // Always refresh models list (ensures new models/aliases are available)
+    // Check both length AND content - new models may be added without changing count
+    const currentModels = blockrun.models as Array<{ id?: string }>;
+    const currentModelIds = new Set(
+      Array.isArray(currentModels) ? currentModels.map((m) => m?.id).filter(Boolean) : [],
+    );
+    const expectedModelIds = OPENCLAW_MODELS.map((m) => m.id);
+    const needsModelUpdate =
       !currentModels ||
       !Array.isArray(currentModels) ||
-      currentModels.length !== OPENCLAW_MODELS.length
-    ) {
+      currentModels.length !== OPENCLAW_MODELS.length ||
+      expectedModelIds.some((id) => !currentModelIds.has(id));
+
+    if (needsModelUpdate) {
       blockrun.models = OPENCLAW_MODELS;
       fixed = true;
+      logger.info(`Updated models list (${OPENCLAW_MODELS.length} models)`);
     }
 
     if (fixed) {

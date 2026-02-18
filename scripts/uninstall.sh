@@ -1,12 +1,34 @@
 #!/bin/bash
 set -e
 
+kill_port_processes() {
+  local port="$1"
+  local pids=""
+
+  if command -v lsof >/dev/null 2>&1; then
+    pids="$(lsof -ti :"$port" 2>/dev/null || true)"
+  elif command -v fuser >/dev/null 2>&1; then
+    pids="$(fuser "$port"/tcp 2>/dev/null || true)"
+  elif command -v ss >/dev/null 2>&1; then
+    pids="$(ss -lptn "sport = :$port" 2>/dev/null | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | sort -u)"
+  elif command -v netstat >/dev/null 2>&1; then
+    pids="$(netstat -nlpt 2>/dev/null | awk -v p=":$port" '$4 ~ p"$" {split($7,a,"/"); if (a[1] ~ /^[0-9]+$/) print a[1]}' | sort -u)"
+  else
+    echo "  Warning: could not find lsof/fuser/ss/netstat; skipping proxy stop"
+    return 0
+  fi
+
+  if [ -n "$pids" ]; then
+    echo "$pids" | xargs kill -9 2>/dev/null || true
+  fi
+}
+
 echo "🦞 ClawRouter Uninstall"
 echo ""
 
 # 1. Stop proxy
 echo "→ Stopping proxy..."
-lsof -ti :8402 | xargs kill -9 2>/dev/null || true
+kill_port_processes 8402
 
 # 2. Remove plugin files
 echo "→ Removing plugin files..."

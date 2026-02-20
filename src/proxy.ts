@@ -75,6 +75,7 @@ const ROUTING_PROFILES = new Set([
 ]);
 const FREE_MODEL = "nvidia/gpt-oss-120b"; // Free model for empty wallet fallback
 const MAX_MESSAGES = 200; // BlockRun API limit - truncate older messages if exceeded
+const CONTEXT_LIMIT_KB = 5120; // Server-side limit: 5MB in KB
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000; // 3 minutes (allows for on-chain tx + LLM response)
 const MAX_FALLBACK_ATTEMPTS = 5; // Maximum models to try in fallback chain (increased from 3 to ensure cheap models are tried)
@@ -711,11 +712,29 @@ function normalizeMessagesForThinking(messages: ExtendedChatMessage[]): Extended
 }
 
 /**
+ * Result of truncating messages.
+ */
+type TruncationResult<T> = {
+  messages: T[];
+  wasTruncated: boolean;
+  originalCount: number;
+  truncatedCount: number;
+};
+
+/**
  * Truncate messages to stay under BlockRun's MAX_MESSAGES limit.
  * Keeps all system messages and the most recent conversation history.
+ * Returns the messages and whether truncation occurred.
  */
-function truncateMessages<T extends { role: string }>(messages: T[]): T[] {
-  if (!messages || messages.length <= MAX_MESSAGES) return messages;
+function truncateMessages<T extends { role: string }>(messages: T[]): TruncationResult<T> {
+  if (!messages || messages.length <= MAX_MESSAGES) {
+    return {
+      messages,
+      wasTruncated: false,
+      originalCount: messages?.length ?? 0,
+      truncatedCount: messages?.length ?? 0,
+    };
+  }
 
   // Separate system messages from conversation
   const systemMsgs = messages.filter((m) => m.role === "system");
@@ -725,11 +744,18 @@ function truncateMessages<T extends { role: string }>(messages: T[]): T[] {
   const maxConversation = MAX_MESSAGES - systemMsgs.length;
   const truncatedConversation = conversationMsgs.slice(-maxConversation);
 
+  const result = [...systemMsgs, ...truncatedConversation];
+
   console.log(
-    `[ClawRouter] Truncated messages: ${messages.length} → ${systemMsgs.length + truncatedConversation.length} (kept ${systemMsgs.length} system + ${truncatedConversation.length} recent)`,
+    `[ClawRouter] Truncated messages: ${messages.length} → ${result.length} (kept ${systemMsgs.length} system + ${truncatedConversation.length} recent)`,
   );
 
-  return [...systemMsgs, ...truncatedConversation];
+  return {
+    messages: result,
+    wasTruncated: true,
+    originalCount: messages.length,
+    truncatedCount: result.length,
+  };
 }
 
 // Kimi/Moonshot models use special Unicode tokens for thinking boundaries.
@@ -1333,7 +1359,8 @@ async function tryModelRequest(
 
     // Truncate messages to stay under BlockRun's limit (200 messages)
     if (Array.isArray(parsed.messages)) {
-      parsed.messages = truncateMessages(parsed.messages as ChatMessage[]);
+      const truncationResult = truncateMessages(parsed.messages as ChatMessage[]);
+      parsed.messages = truncationResult.messages;
     }
 
     // Sanitize tool IDs to match Anthropic's pattern (alphanumeric, underscore, hyphen only)
@@ -1461,6 +1488,9 @@ async function proxyRequest(
     bodyChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   let body = Buffer.concat(bodyChunks);
+
+  // Track original context size for response headers
+  const originalContextSizeKB = Math.ceil(body.length / 1024);
 
   // --- Smart routing ---
   let routingDecision: RoutingDecision | undefined;
@@ -1611,7 +1641,7 @@ async function proxyRequest(
             const tools = parsed.tools as unknown[] | undefined;
             const hasTools = Array.isArray(tools) && tools.length > 0;
 
-            if (hasTools) {
+            if (hasTools && tools) {
               console.log(
                 `[ClawRouter] Tools detected (${tools.length}), agentic mode via keywords`,
               );
@@ -1806,6 +1836,8 @@ async function proxyRequest(
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
       connection: "keep-alive",
+      "x-context-used-kb": String(originalContextSizeKB),
+      "x-context-limit-kb": String(CONTEXT_LIMIT_KB),
     });
     headersSentEarly = true;
 
@@ -2031,8 +2063,12 @@ async function proxyRequest(
           completedAt: Date.now(),
         });
       } else {
-        // Non-streaming: send transformed error response
-        res.writeHead(errStatus, { "Content-Type": "application/json" });
+        // Non-streaming: send transformed error response with context headers
+        res.writeHead(errStatus, {
+          "Content-Type": "application/json",
+          "x-context-used-kb": String(originalContextSizeKB),
+          "x-context-limit-kb": String(CONTEXT_LIMIT_KB),
+        });
         res.end(transformedErr);
 
         deduplicator.complete(dedupKey, {
@@ -2215,6 +2251,10 @@ async function proxyRequest(
           return;
         responseHeaders[key] = value;
       });
+
+      // Add context usage headers
+      responseHeaders["x-context-used-kb"] = String(originalContextSizeKB);
+      responseHeaders["x-context-limit-kb"] = String(CONTEXT_LIMIT_KB);
 
       res.writeHead(upstream.status, responseHeaders);
 

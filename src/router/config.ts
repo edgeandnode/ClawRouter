@@ -638,7 +638,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
     SIMPLE: {
       primary: "moonshot/kimi-k2.5", // $0.50/$2.40 - best quality/price for simple tasks
       fallback: [
-        "minimax/minimax-m2.5", // $0.30/$1.20 - cheap with reasoning
         "google/gemini-2.5-flash", // 1M context, cost-effective
         "nvidia/gpt-oss-120b", // FREE fallback
         "deepseek/deepseek-chat",
@@ -647,7 +646,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
     MEDIUM: {
       primary: "xai/grok-code-fast-1", // Code specialist, $0.20/$1.50
       fallback: [
-        "minimax/minimax-m2.5", // $0.30/$1.20 - cheap with reasoning
         "google/gemini-2.5-flash", // 1M context, cost-effective
         "deepseek/deepseek-chat",
         "xai/grok-4-1-fast-non-reasoning", // Upgraded Grok 4.1
@@ -658,8 +656,7 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
       fallback: [
         "google/gemini-2.5-flash", // CRITICAL: 1M context, cheap failsafe before expensive models
         "google/gemini-2.5-pro",
-        "minimax/minimax-m2.5", // $0.30/$1.20 - cheap with reasoning
-        "deepseek/deepseek-chat", // Another cheap option
+        "deepseek/deepseek-chat",
         "xai/grok-4-0709",
         "openai/gpt-5.2", // Newer and cheaper input than gpt-4o
         "openai/gpt-4o",
@@ -669,7 +666,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
     REASONING: {
       primary: "xai/grok-4-1-fast-reasoning", // Upgraded Grok 4.1 reasoning $0.20/$0.50
       fallback: [
-        "minimax/minimax-m2.5", // $0.30/$1.20 - reasoning capable
         "deepseek/deepseek-reasoner", // Cheap reasoning model
         "openai/o4-mini", // Newer and cheaper than o3 ($1.10 vs $2.00)
         "openai/o3",
@@ -681,19 +677,19 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
   ecoTiers: {
     SIMPLE: {
       primary: "nvidia/gpt-oss-120b", // FREE! $0.00/$0.00
-      fallback: ["google/gemini-2.5-flash", "deepseek/deepseek-chat", "minimax/minimax-m2.5"],
+      fallback: ["google/gemini-2.5-flash", "deepseek/deepseek-chat"],
     },
     MEDIUM: {
       primary: "google/gemini-2.5-flash", // $0.15/$0.60 - cheapest capable
-      fallback: ["deepseek/deepseek-chat", "nvidia/gpt-oss-120b", "minimax/minimax-m2.5"],
+      fallback: ["deepseek/deepseek-chat", "nvidia/gpt-oss-120b"],
     },
     COMPLEX: {
       primary: "google/gemini-2.5-flash", // $0.15/$0.60 - 1M context handles complexity
-      fallback: ["deepseek/deepseek-chat", "xai/grok-4-0709", "minimax/minimax-m2.5"],
+      fallback: ["deepseek/deepseek-chat", "xai/grok-4-0709"],
     },
     REASONING: {
-      primary: "xai/grok-4-1-fast-reasoning", // $0.20/$0.50 - was MORE expensive than AUTO!
-      fallback: ["deepseek/deepseek-reasoner", "minimax/minimax-m2.5"],
+      primary: "xai/grok-4-1-fast-reasoning", // $0.20/$0.50
+      fallback: ["deepseek/deepseek-reasoner"],
     },
   },
 
@@ -740,7 +736,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
     SIMPLE: {
       primary: "moonshot/kimi-k2.5", // Cheaper than Haiku ($0.5/$2.4 vs $1/$5), larger context
       fallback: [
-        "minimax/minimax-m2.5", // $0.30/$1.20 - agentic capable, cheaper than kimi
         "claude-haiku-4.5",
         "xai/grok-4-1-fast-non-reasoning",
         "openai/gpt-4o-mini",
@@ -749,7 +744,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
     MEDIUM: {
       primary: "xai/grok-code-fast-1", // Code specialist for agentic coding
       fallback: [
-        "minimax/minimax-m2.5", // $0.30/$1.20 - agentic capable
         "moonshot/kimi-k2.5",
         "claude-haiku-4.5",
         "claude-sonnet-4",
@@ -759,7 +753,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
       primary: "claude-sonnet-4",
       fallback: [
         "claude-opus-4", // Latest Opus - best agentic
-        "minimax/minimax-m2.5", // $0.30/$1.20 - cheap agentic fallback
         "openai/gpt-5.2",
         "google/gemini-3-pro-preview",
         "xai/grok-4-0709",
@@ -769,7 +762,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
       primary: "claude-sonnet-4", // Strong tool use + reasoning for agentic tasks
       fallback: [
         "claude-opus-4",
-        "minimax/minimax-m2.5", // $0.30/$1.20 - reasoning + agentic
         "xai/grok-4-1-fast-reasoning",
         "deepseek/deepseek-reasoner",
       ],

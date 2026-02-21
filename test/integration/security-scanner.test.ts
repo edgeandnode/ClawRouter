@@ -95,7 +95,9 @@ describe("OpenClaw security scanner", () => {
     const result = await scanDirectoryWithSummary(distDir);
 
     console.log(`[scanner] Scanned ${result.scannedFiles} files`);
-    console.log(`[scanner] Results: ${result.critical} critical, ${result.warn} warn, ${result.info} info`);
+    console.log(
+      `[scanner] Results: ${result.critical} critical, ${result.warn} warn, ${result.info} info`,
+    );
 
     if (result.findings.length > 0) {
       for (const f of result.findings) {

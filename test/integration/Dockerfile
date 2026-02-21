@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenClaw globally (peer dependency)
-RUN npm install -g openclaw@latest
+# --ignore-scripts avoids native compilation of optional deps like @discordjs/opus
+RUN npm install -g --ignore-scripts openclaw@latest
 
 # Copy ClawRouter source and build
 WORKDIR /opt/clawrouter

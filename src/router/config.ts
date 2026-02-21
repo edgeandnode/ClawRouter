@@ -699,7 +699,11 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
   premiumTiers: {
     SIMPLE: {
       primary: "moonshot/kimi-k2.5", // $0.60/$3.00 - good for simple coding
-      fallback: ["anthropic/claude-haiku-4.5", "google/gemini-2.5-flash-lite", "xai/grok-code-fast-1"],
+      fallback: [
+        "anthropic/claude-haiku-4.5",
+        "google/gemini-2.5-flash-lite",
+        "xai/grok-code-fast-1",
+      ],
     },
     MEDIUM: {
       primary: "openai/gpt-5.2-codex", // $2.50/$10 - strong coding for medium tasks
@@ -737,7 +741,11 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
   agenticTiers: {
     SIMPLE: {
       primary: "moonshot/kimi-k2.5", // Cheaper than Haiku ($0.5/$2.4 vs $1/$5), larger context
-      fallback: ["anthropic/claude-haiku-4.5", "xai/grok-4-1-fast-non-reasoning", "openai/gpt-4o-mini"],
+      fallback: [
+        "anthropic/claude-haiku-4.5",
+        "xai/grok-4-1-fast-non-reasoning",
+        "openai/gpt-4o-mini",
+      ],
     },
     MEDIUM: {
       primary: "xai/grok-code-fast-1", // Code specialist for agentic coding
@@ -755,7 +763,11 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
     },
     REASONING: {
       primary: "anthropic/claude-sonnet-4.6", // Strong tool use + reasoning for agentic tasks
-      fallback: ["anthropic/claude-opus-4.6", "xai/grok-4-1-fast-reasoning", "deepseek/deepseek-reasoner"],
+      fallback: [
+        "anthropic/claude-opus-4.6",
+        "xai/grok-4-1-fast-reasoning",
+        "deepseek/deepseek-reasoner",
+      ],
     },
   },
 

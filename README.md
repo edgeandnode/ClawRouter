@@ -85,12 +85,12 @@ Choose your routing strategy with `/model <profile>`:
 Request → Weighted Scorer (15 dimensions) → Tier → Cheapest Model → Response
 ```
 
-| Tier      | ECO Model                          | AUTO Model                   | PREMIUM Model                |
-| --------- | ---------------------------------- | ---------------------------- | ---------------------------- |
-| SIMPLE    | nvidia/gpt-oss-120b (FREE)         | kimi-k2.5 ($0.60/$3.00)      | kimi-k2.5                    |
+| Tier      | ECO Model                           | AUTO Model                   | PREMIUM Model                |
+| --------- | ----------------------------------- | ---------------------------- | ---------------------------- |
+| SIMPLE    | nvidia/gpt-oss-120b (FREE)          | kimi-k2.5 ($0.60/$3.00)      | kimi-k2.5                    |
 | MEDIUM    | gemini-2.5-flash-lite ($0.10/$0.40) | grok-code-fast ($0.20/$1.50) | gpt-5.2-codex ($1.75/$14.00) |
 | COMPLEX   | gemini-2.5-flash-lite ($0.10/$0.40) | gemini-3.1-pro ($2/$12)      | claude-opus-4.6 ($5/$25)     |
-| REASONING | grok-4-fast ($0.20/$0.50)          | grok-4-fast ($0.20/$0.50)    | claude-sonnet-4.6 ($3/$15)   |
+| REASONING | grok-4-fast ($0.20/$0.50)           | grok-4-fast ($0.20/$0.50)    | claude-sonnet-4.6 ($3/$15)   |
 
 **Blended average: $2.05/M** vs $25/M for Claude Opus = **92% savings**
 

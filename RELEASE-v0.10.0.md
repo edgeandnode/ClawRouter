@@ -20,15 +20,15 @@
 
 ### New Models Added
 
-| Model | Price (Input/Output per 1M tokens) | Significance |
-|-------|-----------------------------------|--------------|
-| **google/gemini-3.1-pro-preview** | $2.00 / $12.00 | Newest Gemini with advanced reasoning |
-| **google/gemini-3-flash-preview** | $0.50 / $3.00 | #5 on OpenRouter (6.2% of traffic) |
-| **google/gemini-2.5-flash-lite** | $0.10 / $0.40 | **#2 on OpenRouter (16.8% of traffic!)** |
-| **openai/o1** | $15.00 / $60.00 | Advanced reasoning model |
-| **openai/o1-mini** | $1.10 / $4.40 | Cost-effective reasoning |
-| **openai/gpt-4.1-nano** | $0.10 / $0.40 | Ultra-cheap GPT-4 class model |
-| **xai/grok-2-vision** | $2.00 / $10.00 | Vision-capable Grok model |
+| Model                             | Price (Input/Output per 1M tokens) | Significance                             |
+| --------------------------------- | ---------------------------------- | ---------------------------------------- |
+| **google/gemini-3.1-pro-preview** | $2.00 / $12.00                     | Newest Gemini with advanced reasoning    |
+| **google/gemini-3-flash-preview** | $0.50 / $3.00                      | #5 on OpenRouter (6.2% of traffic)       |
+| **google/gemini-2.5-flash-lite**  | $0.10 / $0.40                      | **#2 on OpenRouter (16.8% of traffic!)** |
+| **openai/o1**                     | $15.00 / $60.00                    | Advanced reasoning model                 |
+| **openai/o1-mini**                | $1.10 / $4.40                      | Cost-effective reasoning                 |
+| **openai/gpt-4.1-nano**           | $0.10 / $0.40                      | Ultra-cheap GPT-4 class model            |
+| **xai/grok-2-vision**             | $2.00 / $10.00                     | Vision-capable Grok model                |
 
 ---
 
@@ -37,10 +37,12 @@
 ### 1. Claude Model Version Alignment
 
 **Before:**
+
 - Used bare `claude-sonnet-4` (unclear which version)
 - Used `claude-opus-4` (4 or 4.5?)
 
 **After:**
+
 - `anthropic/claude-sonnet-4.6` with full provider prefix
 - `anthropic/claude-opus-4.6` with full provider prefix
 - All aliases map to newest 4.6 versions
@@ -51,15 +53,16 @@
 
 ### 2. Critical Pricing Fixes (5 Models)
 
-| Model | Wrong Price | Correct Price | Impact |
-|-------|-------------|---------------|--------|
-| **Gemini 2.5 Flash** | $0.15/$0.60 | $0.30/$2.50 | Router thought it was cheapest, actually 2x more |
-| **Kimi K2.5** | $0.50/$2.40 | $0.60/$3.00 | Picked Kimi over cheaper alternatives |
-| **GPT-5.2 Codex** | $2.50/$12 | $1.75/$14 | Avoided Codex incorrectly (cheaper input!) |
-| **DeepSeek Chat** | $0.14/$0.28 | $0.28/$0.42 | Wrong docs pricing |
-| **DeepSeek Reasoner** | $0.55/$2.19 | $0.28/$0.42 | Wrong docs pricing |
+| Model                 | Wrong Price | Correct Price | Impact                                           |
+| --------------------- | ----------- | ------------- | ------------------------------------------------ |
+| **Gemini 2.5 Flash**  | $0.15/$0.60 | $0.30/$2.50   | Router thought it was cheapest, actually 2x more |
+| **Kimi K2.5**         | $0.50/$2.40 | $0.60/$3.00   | Picked Kimi over cheaper alternatives            |
+| **GPT-5.2 Codex**     | $2.50/$12   | $1.75/$14     | Avoided Codex incorrectly (cheaper input!)       |
+| **DeepSeek Chat**     | $0.14/$0.28 | $0.28/$0.42   | Wrong docs pricing                               |
+| **DeepSeek Reasoner** | $0.55/$2.19 | $0.28/$0.42   | Wrong docs pricing                               |
 
 **Example:**
+
 - **Before:** ECO mode → picks Gemini Flash ($0.30) thinking it's $0.15
 - **After:** ECO mode → picks Flash Lite ($0.10) correctly
 - **Savings:** 67% better decision!
@@ -73,21 +76,23 @@
 ### ECO Tier Dramatic Improvement
 
 **Before:**
+
 - MEDIUM: Gemini Flash ($0.30/$2.50)
 - COMPLEX: Gemini Flash ($0.30/$2.50)
 
 **After:**
+
 - MEDIUM: Gemini Flash Lite ($0.10/$0.40) - **67% cheaper on input!**
 - COMPLEX: Gemini Flash Lite ($0.10/$0.40) - **84% cheaper on output!**
 
 ### ECO vs AUTO Savings (Recalculated)
 
-| Tier | ECO Cost | AUTO Cost | Savings |
-|------|----------|-----------|---------|
-| SIMPLE | FREE | $3.60 | **100%** |
-| MEDIUM | $0.50 | $1.70 | **71%** (was 0%!) |
-| COMPLEX | $0.50 | $14.00 | **96%** (was 80%!) |
-| REASONING | $0.70 | $0.70 | 0% |
+| Tier      | ECO Cost | AUTO Cost | Savings            |
+| --------- | -------- | --------- | ------------------ |
+| SIMPLE    | FREE     | $3.60     | **100%**           |
+| MEDIUM    | $0.50    | $1.70     | **71%** (was 0%!)  |
+| COMPLEX   | $0.50    | $14.00    | **96%** (was 80%!) |
+| REASONING | $0.70    | $0.70     | 0%                 |
 
 ### AUTO Tier Updated
 
@@ -213,13 +218,13 @@ openclaw gateway restart
 
 ## 📊 Success Metrics (Track for 7 days)
 
-| Metric | Baseline | Target |
-|--------|----------|--------|
-| GitHub Stars | ~150 | 300+ |
-| npm Downloads | ~500/month | 2,000/month |
-| OpenClaw Plugin Installs | ~200 | 1,000+ |
-| Average Cost per Request | Unknown | 15-30% lower |
-| User-reported routing errors | Unknown | 0 |
+| Metric                       | Baseline   | Target       |
+| ---------------------------- | ---------- | ------------ |
+| GitHub Stars                 | ~150       | 300+         |
+| npm Downloads                | ~500/month | 2,000/month  |
+| OpenClaw Plugin Installs     | ~200       | 1,000+       |
+| Average Cost per Request     | Unknown    | 15-30% lower |
+| User-reported routing errors | Unknown    | 0            |
 
 ---
 

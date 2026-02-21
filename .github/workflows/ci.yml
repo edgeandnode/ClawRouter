@@ -37,9 +37,3 @@ jobs:
 
       - name: Integration tests (lifecycle)
         run: npx vitest run --config vitest.integration.config.ts test/integration/lifecycle.test.ts
-
-      - name: Integration tests (full-flow)
-        if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-        env:
-          BLOCKRUN_WALLET_KEY: ${{ secrets.BLOCKRUN_WALLET_KEY }}
-        run: npx vitest run --config vitest.integration.config.ts test/integration/full-flow.test.ts

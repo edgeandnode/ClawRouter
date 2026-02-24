@@ -243,7 +243,7 @@ export function formatStatsAscii(stats: AggregatedStats): string {
   lines.push("║  Routing by Tier:                                          ║");
 
   // Show all tiers found in data, ordered by known tiers first then others
-  const knownTiers = ["SIMPLE", "MEDIUM", "COMPLEX", "REASONING"];
+  const knownTiers = ["SIMPLE", "MEDIUM", "COMPLEX", "REASONING", "DIRECT"];
   const allTiers = Object.keys(stats.byTier);
   const otherTiers = allTiers.filter((t) => !knownTiers.includes(t));
   const tierOrder = [...knownTiers.filter((t) => stats.byTier[t]), ...otherTiers];

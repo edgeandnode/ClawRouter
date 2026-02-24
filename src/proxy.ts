@@ -941,6 +941,93 @@ function estimateAmount(
 }
 
 /**
+ * Proxy a partner API request through x402 payment flow.
+ *
+ * Simplified proxy for partner endpoints (/v1/x/*, /v1/partner/*).
+ * No smart routing, SSE, compression, or sessions — just collect body,
+ * forward via payFetch (which handles 402 automatically), and stream back.
+ */
+async function proxyPartnerRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  apiBase: string,
+  payFetch: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    preAuth?: PreAuthParams,
+  ) => Promise<Response>,
+): Promise<void> {
+  const startTime = Date.now();
+  const upstreamUrl = `${apiBase}${req.url}`;
+
+  // Collect request body
+  const bodyChunks: Buffer[] = [];
+  for await (const chunk of req) {
+    bodyChunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const body = Buffer.concat(bodyChunks);
+
+  // Forward headers (strip hop-by-hop)
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (key === "host" || key === "connection" || key === "transfer-encoding" || key === "content-length")
+      continue;
+    if (typeof value === "string") headers[key] = value;
+  }
+  if (!headers["content-type"]) headers["content-type"] = "application/json";
+  headers["user-agent"] = USER_AGENT;
+
+  console.log(`[ClawRouter] Partner request: ${req.method} ${req.url}`);
+
+  const upstream = await payFetch(upstreamUrl, {
+    method: req.method ?? "POST",
+    headers,
+    body: body.length > 0 ? new Uint8Array(body) : undefined,
+  });
+
+  // Forward response headers
+  const responseHeaders: Record<string, string> = {};
+  upstream.headers.forEach((value, key) => {
+    if (key === "transfer-encoding" || key === "connection" || key === "content-encoding") return;
+    responseHeaders[key] = value;
+  });
+
+  res.writeHead(upstream.status, responseHeaders);
+
+  // Stream response body
+  if (upstream.body) {
+    const reader = upstream.body.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        safeWrite(res, Buffer.from(value));
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  res.end();
+
+  const latencyMs = Date.now() - startTime;
+  console.log(`[ClawRouter] Partner response: ${upstream.status} (${latencyMs}ms)`);
+
+  // Log partner usage (fire-and-forget)
+  logUsage({
+    timestamp: new Date().toISOString(),
+    model: "partner",
+    tier: "PARTNER",
+    cost: 0, // Actual cost handled by x402 settlement
+    baselineCost: 0,
+    savings: 0,
+    latencyMs,
+    partnerId: (req.url?.split("?")[0] ?? "").replace(/^\/v1\//, "").replace(/\//g, "_") || "unknown",
+    service: "partner",
+  }).catch(() => {});
+}
+
+/**
  * Start the local x402 proxy server.
  *
  * If a proxy is already running on the target port, reuses it instead of failing.
@@ -1105,6 +1192,25 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
       const models = buildProxyModelList();
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ object: "list", data: models }));
+      return;
+    }
+
+    // --- Handle partner API paths (/v1/x/*, /v1/partner/*) ---
+    if (req.url?.match(/^\/v1\/(?:x|partner)\//)) {
+      try {
+        await proxyPartnerRequest(req, res, apiBase, payFetch);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        options.onError?.(error);
+        if (!res.headersSent) {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: { message: `Partner proxy error: ${error.message}`, type: "partner_error" },
+            }),
+          );
+        }
+      }
       return;
     }
 
@@ -2357,11 +2463,13 @@ async function proxyRequest(
   // --- Usage logging (fire-and-forget) ---
   // Note: Recalculate cost using full body length (not just system+user message)
   // and apply 20% buffer to match actual x402 payment (see estimateAmount())
-  if (routingDecision) {
+  // Log ALL requests: both auto-routed (routingDecision set) and direct model picks
+  const logModel = routingDecision?.model ?? modelId;
+  if (logModel) {
     // Use full body length for accurate cost (matches x402 payment estimation)
     const estimatedInputTokens = Math.ceil(body.length / 4);
     const accurateCosts = calculateModelCost(
-      routingDecision.model,
+      logModel,
       routerOpts.modelPricing,
       estimatedInputTokens,
       maxTokens,
@@ -2372,8 +2480,8 @@ async function proxyRequest(
     const baselineWithBuffer = accurateCosts.baselineCost * 1.2;
     const entry: UsageEntry = {
       timestamp: new Date().toISOString(),
-      model: routingDecision.model,
-      tier: routingDecision.tier,
+      model: logModel,
+      tier: routingDecision?.tier ?? "DIRECT",
       cost: costWithBuffer,
       baselineCost: baselineWithBuffer,
       savings: accurateCosts.savings,

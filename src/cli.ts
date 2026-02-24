@@ -18,6 +18,7 @@ import { resolveOrGenerateWalletKey } from "./auth.js";
 import { BalanceMonitor } from "./balance.js";
 import { VERSION } from "./version.js";
 import { runDoctor } from "./doctor.js";
+import { PARTNER_SERVICES } from "./partners/index.js";
 
 function printHelp(): void {
   console.log(`
@@ -26,6 +27,7 @@ ClawRouter v${VERSION} - Smart LLM Router
 Usage:
   clawrouter [options]
   clawrouter doctor [opus] [question]
+  clawrouter partners [test]
 
 Options:
   --version, -v     Show version number
@@ -35,6 +37,8 @@ Options:
 Commands:
   doctor            AI-powered diagnostics (default: Sonnet ~$0.003)
   doctor opus       Use Opus for deeper analysis (~$0.01)
+  partners          List available partner APIs with pricing
+  partners test     Test partner API endpoints (expect 402 = alive)
 
 Examples:
   # Start standalone proxy
@@ -64,12 +68,16 @@ function parseArgs(args: string[]): {
   version: boolean;
   help: boolean;
   doctor: boolean;
+  partners: boolean;
+  partnersTest: boolean;
   port?: number;
 } {
   const result = {
     version: false,
     help: false,
     doctor: false,
+    partners: false,
+    partnersTest: false,
     port: undefined as number | undefined,
   };
 
@@ -81,6 +89,13 @@ function parseArgs(args: string[]): {
       result.help = true;
     } else if (arg === "doctor" || arg === "--doctor") {
       result.doctor = true;
+    } else if (arg === "partners") {
+      result.partners = true;
+      // Check for "test" subcommand
+      if (args[i + 1] === "test") {
+        result.partnersTest = true;
+        i++;
+      }
     } else if (arg === "--port" && args[i + 1]) {
       result.port = parseInt(args[i + 1], 10);
       i++; // Skip next arg
@@ -123,6 +138,43 @@ async function main(): Promise<void> {
 
     const userQuestion = questionArgs.join(" ").trim() || undefined;
     await runDoctor(userQuestion, model);
+    process.exit(0);
+  }
+
+  if (args.partners) {
+    if (PARTNER_SERVICES.length === 0) {
+      console.log("No partner APIs available.");
+      process.exit(0);
+    }
+
+    console.log(`\nClawRouter Partner APIs (v${VERSION})\n`);
+
+    for (const svc of PARTNER_SERVICES) {
+      console.log(`  ${svc.name} (${svc.partner})`);
+      console.log(`    ${svc.description}`);
+      console.log(`    Tool:    blockrun_${svc.id}`);
+      console.log(`    Method:  ${svc.method} /v1${svc.proxyPath}`);
+      console.log(`    Pricing: ${svc.pricing.perUnit} per ${svc.pricing.unit} (min ${svc.pricing.minimum}, max ${svc.pricing.maximum})`);
+      console.log();
+    }
+
+    if (args.partnersTest) {
+      console.log("Testing partner endpoints...\n");
+      const apiBase = "https://blockrun.ai/api";
+      for (const svc of PARTNER_SERVICES) {
+        const url = `${apiBase}/v1${svc.proxyPath}`;
+        try {
+          const response = await fetch(url, { method: "GET" });
+          const status = response.status;
+          const ok = status === 402 ? "alive (402 = payment required)" : `status ${status}`;
+          console.log(`  ${svc.id}: ${ok}`);
+        } catch (err) {
+          console.log(`  ${svc.id}: error - ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      console.log();
+    }
+
     process.exit(0);
   }
 

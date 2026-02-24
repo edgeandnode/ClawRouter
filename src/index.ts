@@ -665,6 +665,51 @@ const plugin: OpenClawPluginDefinition = {
 
     api.logger.info("BlockRun provider registered (30+ models via x402)");
 
+    // Register partner API tools (Twitter/X lookup, etc.)
+    try {
+      const { buildPartnerTools, PARTNER_SERVICES } = await import("./partners/index.js");
+      const proxyBaseUrl = `http://127.0.0.1:${runtimePort}`;
+      const partnerTools = buildPartnerTools(proxyBaseUrl);
+      for (const tool of partnerTools) {
+        api.registerTool(tool);
+      }
+      if (partnerTools.length > 0) {
+        api.logger.info(`Registered ${partnerTools.length} partner tool(s): ${partnerTools.map((t) => t.name).join(", ")}`);
+      }
+
+      // Register /partners command
+      api.registerCommand({
+        name: "partners",
+        description: "List available partner APIs and pricing",
+        acceptsArgs: false,
+        requireAuth: false,
+        handler: async () => {
+          if (PARTNER_SERVICES.length === 0) {
+            return { text: "No partner APIs available." };
+          }
+
+          const lines = [
+            "**Partner APIs** (paid via your ClawRouter wallet)",
+            "",
+          ];
+
+          for (const svc of PARTNER_SERVICES) {
+            lines.push(`**${svc.name}** (${svc.partner})`);
+            lines.push(`  ${svc.description}`);
+            lines.push(`  Tool: \`${`blockrun_${svc.id}`}\``);
+            lines.push(`  Pricing: ${svc.pricing.perUnit} per ${svc.pricing.unit} (min ${svc.pricing.minimum}, max ${svc.pricing.maximum})`);
+            lines.push("");
+          }
+
+          return { text: lines.join("\n") };
+        },
+      });
+    } catch (err) {
+      api.logger.warn(
+        `Failed to register partner tools: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     // Register /wallet command for wallet management
     createWalletCommand()
       .then((walletCommand) => {
@@ -807,3 +852,5 @@ export { SessionStore, getSessionId, DEFAULT_SESSION_CONFIG } from "./session.js
 export type { SessionEntry, SessionConfig } from "./session.js";
 export { ResponseCache } from "./response-cache.js";
 export type { CachedLLMResponse, ResponseCacheConfig } from "./response-cache.js";
+export { PARTNER_SERVICES, getPartnerService, buildPartnerTools } from "./partners/index.js";
+export type { PartnerServiceDefinition, PartnerToolDefinition } from "./partners/index.js";

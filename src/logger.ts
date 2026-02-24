@@ -20,6 +20,10 @@ export type UsageEntry = {
   baselineCost: number;
   savings: number; // 0-1 percentage
   latencyMs: number;
+  /** Partner service ID (e.g., "x_users_lookup") — only set for partner API calls */
+  partnerId?: string;
+  /** Partner service name (e.g., "AttentionVC") — only set for partner API calls */
+  service?: string;
 };
 
 const LOG_DIR = join(homedir(), ".openclaw", "blockrun", "logs");

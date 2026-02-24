@@ -21,43 +21,43 @@ OpenClaw 2026.2.22 added multilingual memory search for Spanish, Portuguese, Jap
 
 ### Keywords Added Across All 12 Dimensions
 
-| Dimension              | ES | PT | KO | AR |
-| ---------------------- | -- | -- | -- | -- |
-| codeKeywords           | ✅ | ✅ | ✅ | ✅ |
-| reasoningKeywords      | ✅ | ✅ | ✅ | ✅ |
-| simpleKeywords         | ✅ | ✅ | ✅ | ✅ |
-| technicalKeywords      | ✅ | ✅ | ✅ | ✅ |
-| creativeKeywords       | ✅ | ✅ | ✅ | ✅ |
-| imperativeVerbs        | ✅ | ✅ | ✅ | ✅ |
-| constraintIndicators   | ✅ | ✅ | ✅ | ✅ |
-| outputFormatKeywords   | ✅ | ✅ | ✅ | ✅ |
-| referenceKeywords      | ✅ | ✅ | ✅ | ✅ |
-| negationKeywords       | ✅ | ✅ | ✅ | ✅ |
-| domainSpecificKeywords | ✅ | ✅ | ✅ | ✅ |
-| agenticTaskKeywords    | ✅ | ✅ | ✅ | ✅ |
+| Dimension              | ES  | PT  | KO  | AR  |
+| ---------------------- | --- | --- | --- | --- |
+| codeKeywords           | ✅  | ✅  | ✅  | ✅  |
+| reasoningKeywords      | ✅  | ✅  | ✅  | ✅  |
+| simpleKeywords         | ✅  | ✅  | ✅  | ✅  |
+| technicalKeywords      | ✅  | ✅  | ✅  | ✅  |
+| creativeKeywords       | ✅  | ✅  | ✅  | ✅  |
+| imperativeVerbs        | ✅  | ✅  | ✅  | ✅  |
+| constraintIndicators   | ✅  | ✅  | ✅  | ✅  |
+| outputFormatKeywords   | ✅  | ✅  | ✅  | ✅  |
+| referenceKeywords      | ✅  | ✅  | ✅  | ✅  |
+| negationKeywords       | ✅  | ✅  | ✅  | ✅  |
+| domainSpecificKeywords | ✅  | ✅  | ✅  | ✅  |
+| agenticTaskKeywords    | ✅  | ✅  | ✅  | ✅  |
 
 ---
 
 ## 📝 Metadata Updates
 
-| File                   | Change                              |
-| ---------------------- | ----------------------------------- |
-| `package.json`         | Version 0.10.4 → 0.10.5            |
-| `package.json`         | Description: "41 models" → "41+"    |
+| File                   | Change                                |
+| ---------------------- | ------------------------------------- |
+| `package.json`         | Version 0.10.4 → 0.10.5               |
+| `package.json`         | Description: "41 models" → "41+"      |
 | `openclaw.plugin.json` | "30+ models, 78%" → "41+ models, 92%" |
-| `README.md`            | All model counts: 38+/30+ → 41+    |
+| `README.md`            | All model counts: 38+/30+ → 41+       |
 
 ---
 
 ## 📋 OpenClaw 2026.2.22 Compatibility Notes
 
-| OpenClaw Feature         | ClawRouter Impact | Status     |
-| ------------------------ | ----------------- | ---------- |
+| OpenClaw Feature         | ClawRouter Impact | Status                                   |
+| ------------------------ | ----------------- | ---------------------------------------- |
 | Mistral provider support | Add models        | ⏳ Pending (blocked on BlockRun backend) |
-| Multilingual memory      | Keyword expansion | ✅ Done    |
-| Auto-updater             | No impact         | ✅ N/A     |
-| Cron parallel runs       | Proxy handles it  | ✅ OK      |
-| 40+ security fixes       | No impact         | ✅ N/A     |
+| Multilingual memory      | Keyword expansion | ✅ Done                                  |
+| Auto-updater             | No impact         | ✅ N/A                                   |
+| Cron parallel runs       | Proxy handles it  | ✅ OK                                    |
+| 40+ security fixes       | No impact         | ✅ N/A                                   |
 
 ---
 

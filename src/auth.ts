@@ -51,11 +51,13 @@ async function loadSavedWallet(): Promise<string | undefined> {
     console.error(`[ClawRouter] ✗ CRITICAL: Wallet file exists but has invalid format!`);
     console.error(`[ClawRouter]   File: ${WALLET_FILE}`);
     console.error(`[ClawRouter]   Expected: 0x followed by 64 hex characters (66 chars total)`);
-    console.error(`[ClawRouter]   To fix: restore your backup key or set BLOCKRUN_WALLET_KEY env var`);
+    console.error(
+      `[ClawRouter]   To fix: restore your backup key or set BLOCKRUN_WALLET_KEY env var`,
+    );
     throw new Error(
       `Wallet file at ${WALLET_FILE} is corrupted or has wrong format. ` +
-      `Refusing to auto-generate new wallet to protect existing funds. ` +
-      `Restore your backup key or set BLOCKRUN_WALLET_KEY environment variable.`,
+        `Refusing to auto-generate new wallet to protect existing funds. ` +
+        `Restore your backup key or set BLOCKRUN_WALLET_KEY environment variable.`,
     );
   } catch (err) {
     // Re-throw corruption errors (not ENOENT)
@@ -69,8 +71,8 @@ async function loadSavedWallet(): Promise<string | undefined> {
       );
       throw new Error(
         `Cannot read wallet file at ${WALLET_FILE}: ${err instanceof Error ? err.message : String(err)}. ` +
-        `Refusing to auto-generate new wallet to protect existing funds. ` +
-        `Fix file permissions or set BLOCKRUN_WALLET_KEY environment variable.`,
+          `Refusing to auto-generate new wallet to protect existing funds. ` +
+          `Fix file permissions or set BLOCKRUN_WALLET_KEY environment variable.`,
       );
     }
   }

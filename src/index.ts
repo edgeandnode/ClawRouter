@@ -679,7 +679,9 @@ const plugin: OpenClawPluginDefinition = {
         api.registerTool(tool);
       }
       if (partnerTools.length > 0) {
-        api.logger.info(`Registered ${partnerTools.length} partner tool(s): ${partnerTools.map((t) => t.name).join(", ")}`);
+        api.logger.info(
+          `Registered ${partnerTools.length} partner tool(s): ${partnerTools.map((t) => t.name).join(", ")}`,
+        );
       }
 
       // Register /partners command
@@ -693,17 +695,18 @@ const plugin: OpenClawPluginDefinition = {
             return { text: "No partner APIs available." };
           }
 
-          const lines = [
-            "**Partner APIs** (paid via your ClawRouter wallet)",
-            "",
-          ];
+          const lines = ["**Partner APIs** (paid via your ClawRouter wallet)", ""];
 
           for (const svc of PARTNER_SERVICES) {
             lines.push(`**${svc.name}** (${svc.partner})`);
             lines.push(`  ${svc.description}`);
             lines.push(`  Tool: \`${`blockrun_${svc.id}`}\``);
-            lines.push(`  Pricing: ${svc.pricing.perUnit} per ${svc.pricing.unit} (min ${svc.pricing.minimum}, max ${svc.pricing.maximum})`);
-            lines.push(`  **How to use:** Ask "Look up Twitter user @elonmusk" or "Get info on these X accounts: @naval, @balajis"`);
+            lines.push(
+              `  Pricing: ${svc.pricing.perUnit} per ${svc.pricing.unit} (min ${svc.pricing.minimum}, max ${svc.pricing.maximum})`,
+            );
+            lines.push(
+              `  **How to use:** Ask "Look up Twitter user @elonmusk" or "Get info on these X accounts: @naval, @balajis"`,
+            );
             lines.push("");
           }
 

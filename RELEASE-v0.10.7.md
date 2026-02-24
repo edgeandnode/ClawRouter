@@ -23,12 +23,14 @@ The `blockrun_x_users_lookup` tool was registered correctly but the AI rarely ca
 **Root cause:** The description said what the tool _is_, not when the AI _must_ use it.
 
 **Before:**
+
 ```
 "Look up Twitter/X user profiles by username. Returns follower counts,
 verification status, bio, and more. Accepts up to 100 usernames per request."
 ```
 
 **After:**
+
 ```
 "ALWAYS use this tool to look up real-time Twitter/X user profiles.
 Call this when the user asks about any Twitter/X account, username, handle,
@@ -68,6 +70,7 @@ The `/partners` command output now includes a **How to use** line so users know 
 Previously, if the wallet file existed but had an invalid format, ClawRouter would silently fall through and generate a new empty wallet — potentially abandoning a funded wallet.
 
 **Now:** throws a descriptive error with recovery instructions:
+
 ```
 CRITICAL: Wallet file exists but has invalid format!
 Refusing to auto-generate new wallet to protect existing funds.
@@ -80,14 +83,14 @@ Also adds a prominent backup reminder banner when a new wallet is generated for 
 
 ## 📋 Files Changed
 
-| File | Change |
-|------|--------|
-| `src/partners/registry.ts` | Directive tool description for `x_users_lookup` |
-| `src/index.ts` | Usage hint in `/partners` command output |
-| `src/router/selector.ts` | Fix `BASELINE_MODEL_ID` typo (`4-5` → `4.6`) |
-| `src/router/selector.test.ts` | Update test mock to match corrected baseline ID |
-| `src/auth.ts` | Wallet corruption safety + new-wallet backup reminder |
-| `package.json` | Version bump `0.10.6` → `0.10.7` |
+| File                          | Change                                                |
+| ----------------------------- | ----------------------------------------------------- |
+| `src/partners/registry.ts`    | Directive tool description for `x_users_lookup`       |
+| `src/index.ts`                | Usage hint in `/partners` command output              |
+| `src/router/selector.ts`      | Fix `BASELINE_MODEL_ID` typo (`4-5` → `4.6`)          |
+| `src/router/selector.test.ts` | Update test mock to match corrected baseline ID       |
+| `src/auth.ts`                 | Wallet corruption safety + new-wallet backup reminder |
+| `package.json`                | Version bump `0.10.6` → `0.10.7`                      |
 
 ---
 

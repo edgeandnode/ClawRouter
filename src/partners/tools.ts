@@ -23,10 +23,7 @@ export type PartnerToolDefinition = {
 /**
  * Build a single partner tool from a service definition.
  */
-function buildTool(
-  service: PartnerServiceDefinition,
-  proxyBaseUrl: string,
-): PartnerToolDefinition {
+function buildTool(service: PartnerServiceDefinition, proxyBaseUrl: string): PartnerToolDefinition {
   // Build JSON Schema properties from service params
   const properties: Record<string, unknown> = {};
   const required: string[] = [];

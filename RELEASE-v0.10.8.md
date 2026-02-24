@@ -24,10 +24,10 @@ OpenClaw expects `{ content: [{ type: "text", text: "..." }], details: ... }`. C
 
 ## 📋 File Changed
 
-| File | Change |
-|------|--------|
+| File                    | Change                                      |
+| ----------------------- | ------------------------------------------- |
 | `src/partners/tools.ts` | Fix all 3 OpenClaw tool API contract issues |
-| `package.json` | Version bump `0.10.7` → `0.10.8` |
+| `package.json`          | Version bump `0.10.7` → `0.10.8`            |
 
 ---
 

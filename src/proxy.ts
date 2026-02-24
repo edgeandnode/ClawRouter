@@ -982,7 +982,12 @@ async function proxyPartnerRequest(
   // Forward headers (strip hop-by-hop)
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
-    if (key === "host" || key === "connection" || key === "transfer-encoding" || key === "content-length")
+    if (
+      key === "host" ||
+      key === "connection" ||
+      key === "transfer-encoding" ||
+      key === "content-length"
+    )
       continue;
     if (typeof value === "string") headers[key] = value;
   }
@@ -1034,7 +1039,8 @@ async function proxyPartnerRequest(
     baselineCost: 0,
     savings: 0,
     latencyMs,
-    partnerId: (req.url?.split("?")[0] ?? "").replace(/^\/v1\//, "").replace(/\//g, "_") || "unknown",
+    partnerId:
+      (req.url?.split("?")[0] ?? "").replace(/^\/v1\//, "").replace(/\//g, "_") || "unknown",
     service: "partner",
   }).catch(() => {});
 }

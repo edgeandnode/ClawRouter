@@ -303,6 +303,9 @@ const PROVIDER_ERROR_PATTERNS = [
   /request too large/i,
   /request.*size.*exceeds/i,
   /payload too large/i,
+  /payment.*verification.*failed/i,
+  /model.*not.*allowed/i,
+  /unknown.*model/i,
 ];
 
 /**
@@ -935,8 +938,8 @@ function estimateAmount(
     (estimatedOutputTokens / 1_000_000) * model.outputPrice;
 
   // Convert to USDC 6-decimal integer, add 20% buffer for estimation error
-  // Minimum 100 ($0.0001) to avoid zero-amount rejections
-  const amountMicros = Math.max(100, Math.ceil(costUsd * 1.2 * 1_000_000));
+  // Minimum 1000 ($0.001) to match CDP Facilitator's enforced minimum payment
+  const amountMicros = Math.max(1000, Math.ceil(costUsd * 1.2 * 1_000_000));
   return amountMicros.toString();
 }
 

@@ -55,6 +55,8 @@ export const MODEL_ALIASES: Record<string, string> = {
 
   // Kimi / Moonshot
   kimi: "moonshot/kimi-k2.5",
+  moonshot: "moonshot/kimi-k2.5",
+  "kimi-k2.5": "moonshot/kimi-k2.5",
 
   // Google
   gemini: "google/gemini-2.5-pro",

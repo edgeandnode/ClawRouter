@@ -814,6 +814,18 @@ export type ProxyOptions = {
   /** Port to listen on (default: 8402) */
   port?: number;
   routingConfig?: Partial<RoutingConfig>;
+  /**
+   * Custom payment-enabled fetch function. When provided, replaces the built-in
+   * x402 payment handler. Use this to integrate alternative payment systems
+   * (e.g., spend limits, budget enforcement, or custom payment flows).
+   *
+   * If not provided, uses built-in createPaymentFetch with walletKey.
+   */
+  paymentFetch?: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    preAuth?: PreAuthParams,
+  ) => Promise<Response>;
   /** Request timeout in ms (default: 180000 = 3 minutes). Covers on-chain tx + LLM response. */
   requestTimeoutMs?: number;
   /** Skip balance checks (for testing only). Default: false */
@@ -970,7 +982,12 @@ async function proxyPartnerRequest(
   // Forward headers (strip hop-by-hop)
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
-    if (key === "host" || key === "connection" || key === "transfer-encoding" || key === "content-length")
+    if (
+      key === "host" ||
+      key === "connection" ||
+      key === "transfer-encoding" ||
+      key === "content-length"
+    )
       continue;
     if (typeof value === "string") headers[key] = value;
   }
@@ -1022,7 +1039,8 @@ async function proxyPartnerRequest(
     baselineCost: 0,
     savings: 0,
     latencyMs,
-    partnerId: (req.url?.split("?")[0] ?? "").replace(/^\/v1\//, "").replace(/\//g, "_") || "unknown",
+    partnerId:
+      (req.url?.split("?")[0] ?? "").replace(/^\/v1\//, "").replace(/\//g, "_") || "unknown",
     service: "partner",
   }).catch(() => {});
 }
@@ -1069,9 +1087,10 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
     };
   }
 
-  // Create x402 payment-enabled fetch from wallet private key
+  // Create x402 payment-enabled fetch from wallet private key (or use custom paymentFetch)
   const account = privateKeyToAccount(options.walletKey as `0x${string}`);
-  const { fetch: payFetch } = createPaymentFetch(options.walletKey as `0x${string}`);
+  const payFetch =
+    options.paymentFetch ?? createPaymentFetch(options.walletKey as `0x${string}`).fetch;
 
   // Create balance monitor for pre-request checks
   const balanceMonitor = new BalanceMonitor(account.address);

@@ -154,7 +154,9 @@ async function main(): Promise<void> {
       console.log(`    ${svc.description}`);
       console.log(`    Tool:    blockrun_${svc.id}`);
       console.log(`    Method:  ${svc.method} /v1${svc.proxyPath}`);
-      console.log(`    Pricing: ${svc.pricing.perUnit} per ${svc.pricing.unit} (min ${svc.pricing.minimum}, max ${svc.pricing.maximum})`);
+      console.log(
+        `    Pricing: ${svc.pricing.perUnit} per ${svc.pricing.unit} (min ${svc.pricing.minimum}, max ${svc.pricing.maximum})`,
+      );
       console.log();
     }
 

@@ -1,5 +1,5 @@
 {
-  "name": "@blockrun/clawrouter",
+  "name": "@ampersend_ai/clawrouter-core",
   "version": "0.10.6",
   "description": "Smart LLM router — save 92% on inference costs. 41+ models, one wallet, x402 micropayments.",
   "type": "module",
@@ -65,7 +65,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BlockRunAI/ClawRouter.git"
+    "url": "git+https://github.com/edgeandnode/ClawRouter.git"
   },
   "dependencies": {
     "viem": "^2.39.3"

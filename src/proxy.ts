@@ -26,6 +26,7 @@ import { finished } from "node:stream";
 import type { AddressInfo } from "node:net";
 import { privateKeyToAccount } from "viem/accounts";
 import { createPaymentFetch, type PreAuthParams } from "./x402.js";
+import type { AmpersendConfig } from "./ampersend.js";
 import {
   route,
   getFallbackChain,
@@ -810,6 +811,7 @@ export type InsufficientFundsInfo = {
 
 export type ProxyOptions = {
   walletKey: string;
+  ampersendConfig?: AmpersendConfig;
   apiBase?: string;
   /** Port to listen on (default: 8402) */
   port?: number;
@@ -1070,8 +1072,14 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   }
 
   // Create x402 payment-enabled fetch from wallet private key
-  const account = privateKeyToAccount(options.walletKey as `0x${string}`);
-  const { fetch: payFetch } = createPaymentFetch(options.walletKey as `0x${string}`);
+  // const account = privateKeyToAccount(options.walletKey as `0x${string}`);
+  // const { fetch: payFetch } = createPaymentFetch(options.walletKey as `0x${string}`);
+
+  if (!options.ampersendConfig) {
+    throw new Error("ampersendConfig is required");
+  }
+  const account = { address: options.ampersendConfig.address as `0x${string}` };
+  const payFetch = options.ampersendConfig.paymentFetch;
 
   // Create balance monitor for pre-request checks
   const balanceMonitor = new BalanceMonitor(account.address);

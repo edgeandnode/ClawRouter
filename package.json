@@ -68,6 +68,9 @@
     "url": "git+https://github.com/edgeandnode/ClawRouter.git"
   },
   "dependencies": {
+    "@ampersend_ai/ampersend-sdk": "^0.0.8",
+    "@x402/core": "^2.1.0",
+    "@x402/fetch": "^2.1.0",
     "viem": "^2.39.3"
   },
   "peerDependencies": {

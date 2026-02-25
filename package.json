@@ -1,5 +1,5 @@
 {
-  "name": "@ampersend_ai/clawrouter-core",
+  "name": "@ampersend_ai/clawrouter",
   "version": "0.10.6",
   "description": "Smart LLM router — save 92% on inference costs. 41+ models, one wallet, x402 micropayments.",
   "type": "module",

@@ -28,6 +28,7 @@ import { startProxy, getProxyPort } from "./proxy.js";
 import { resolveOrGenerateWalletKey, WALLET_FILE } from "./auth.js";
 import type { RoutingConfig } from "./router/index.js";
 import { BalanceMonitor } from "./balance.js";
+import { resolveAmpersendConfig } from "./ampersend.js";
 
 /**
  * Wait for proxy health check to pass (quick check, not RPC).
@@ -428,22 +429,28 @@ let activeProxyHandle: Awaited<ReturnType<typeof startProxy>> | null = null;
  */
 async function startProxyInBackground(api: OpenClawPluginApi): Promise<void> {
   // Resolve wallet key: saved file → env var → auto-generate
-  const { key: walletKey, address, source } = await resolveOrGenerateWalletKey();
+  // const { key: walletKey, address, source } = await resolveOrGenerateWalletKey();
 
   // Log wallet source (brief - balance check happens after proxy starts)
-  if (source === "generated") {
-    api.logger.info(`Generated new wallet: ${address}`);
-  } else if (source === "saved") {
-    api.logger.info(`Using saved wallet: ${address}`);
-  } else {
-    api.logger.info(`Using wallet from BLOCKRUN_WALLET_KEY: ${address}`);
-  }
+  // if (source === "generated") {
+  //   api.logger.info(`Generated new wallet: ${address}`);
+  // } else if (source === "saved") {
+  //   api.logger.info(`Using saved wallet: ${address}`);
+  // } else {
+  //   api.logger.info(`Using wallet from BLOCKRUN_WALLET_KEY: ${address}`);
+  // }
+
+  // Resolve ampersend mode
+  const ampersendConfig = resolveAmpersendConfig(api.pluginConfig ?? {});
+  const address = ampersendConfig.address;
+  api.logger.info(`[ampersend] Using smart account: ${address}`);
 
   // Resolve routing config overrides from plugin config
   const routingConfig = api.pluginConfig?.routing as Partial<RoutingConfig> | undefined;
 
   const proxy = await startProxy({
-    walletKey,
+    walletKey: "0x0000000000000000000000000000000000000000000000000000000000000001",
+    ampersendConfig,
     routingConfig,
     onReady: (port) => {
       api.logger.info(`BlockRun x402 proxy listening on port ${port}`);

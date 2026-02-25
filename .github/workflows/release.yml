@@ -51,7 +51,7 @@ jobs:
     needs: verify-version
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@ampersend_ai/clawrouter-core
+      url: https://www.npmjs.com/package/@ampersend_ai/clawrouter
 
     steps:
       - name: Checkout

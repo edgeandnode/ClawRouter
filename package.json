@@ -1,5 +1,5 @@
 {
-  "name": "@ampersend_ai/clawrouter-core",
+  "name": "@ampersend_ai/clawrouter",
   "version": "0.10.6",
   "description": "Smart LLM router — save 92% on inference costs. 41+ models, one wallet, x402 micropayments.",
   "type": "module",
@@ -68,6 +68,9 @@
     "url": "git+https://github.com/edgeandnode/ClawRouter.git"
   },
   "dependencies": {
+    "@ampersend_ai/ampersend-sdk": "^0.0.8",
+    "@x402/core": "^2.1.0",
+    "@x402/fetch": "^2.1.0",
     "viem": "^2.39.3"
   },
   "peerDependencies": {

@@ -9,6 +9,10 @@
         "type": "string",
         "description": "EVM wallet private key (0x...). Optional — auto-generated if not set."
       },
+      "ampersend_agent_key": {
+        "type": "string",
+        "description": "Ampersend agent key (smartAccountAddress:::sessionKey). If set, overrides walletKey. Get from https://app.ampersend.ai"
+      },
       "routing": {
         "type": "object",
         "description": "Override default routing configuration"
@@ -20,6 +24,11 @@
       "label": "Wallet Private Key",
       "sensitive": true,
       "placeholder": "0x... (optional — auto-generated)"
+    },
+    "ampersend_agent_key": {
+      "label": "Ampersend Agent Key",
+      "sensitive": true,
+      "placeholder": "0x...:::0x... (from app.ampersend.ai)"
     }
   }
 }

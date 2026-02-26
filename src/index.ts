@@ -28,6 +28,7 @@ import { startProxy, getProxyPort } from "./proxy.js";
 import { resolveOrGenerateWalletKey, WALLET_FILE } from "./auth.js";
 import type { RoutingConfig } from "./router/index.js";
 import { BalanceMonitor } from "./balance.js";
+import { resolveAmpersendConfig } from "./ampersend.js";
 
 /**
  * Wait for proxy health check to pass (quick check, not RPC).
@@ -444,11 +445,20 @@ async function startProxyInBackground(api: OpenClawPluginApi): Promise<void> {
     api.logger.info(`Using wallet from BLOCKRUN_WALLET_KEY: ${address}`);
   }
 
+  // Resolve ampersend config (optional - from plugin config)
+  const ampersendConfig = api.pluginConfig?.ampersend_agent_key
+    ? resolveAmpersendConfig(api.pluginConfig)
+    : undefined;
+  if (ampersendConfig) {
+    api.logger.info(`[ampersend] Using smart account: ${ampersendConfig.address}`);
+  }
+
   // Resolve routing config overrides from plugin config
   const routingConfig = api.pluginConfig?.routing as Partial<RoutingConfig> | undefined;
 
   const proxy = await startProxy({
     walletKey,
+    ampersendConfig,  // optional - if present, overrides wallet-based payments
     routingConfig,
     onReady: (port) => {
       api.logger.info(`BlockRun x402 proxy listening on port ${port}`);

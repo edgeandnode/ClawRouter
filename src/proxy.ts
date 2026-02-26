@@ -26,6 +26,7 @@ import { finished } from "node:stream";
 import type { AddressInfo } from "node:net";
 import { privateKeyToAccount } from "viem/accounts";
 import { createPaymentFetch, type PreAuthParams } from "./x402.js";
+import type { AmpersendConfig } from "./ampersend.js";
 import {
   route,
   getFallbackChain,
@@ -813,6 +814,7 @@ export type InsufficientFundsInfo = {
 
 export type ProxyOptions = {
   walletKey: string;
+  ampersendConfig?: AmpersendConfig;
   apiBase?: string;
   /** Port to listen on (default: 8402) */
   port?: number;
@@ -1048,7 +1050,9 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
   const existingWallet = await checkExistingProxy(listenPort);
   if (existingWallet) {
     // Proxy already running — reuse it instead of failing with EADDRINUSE
-    const account = privateKeyToAccount(options.walletKey as `0x${string}`);
+    const account = options.ampersendConfig
+      ? { address: options.ampersendConfig.address as `0x${string}` }
+      : privateKeyToAccount(options.walletKey as `0x${string}`);
     const balanceMonitor = new BalanceMonitor(account.address);
     const baseUrl = `http://127.0.0.1:${listenPort}`;
 
@@ -1072,9 +1076,13 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
     };
   }
 
-  // Create x402 payment-enabled fetch from wallet private key
-  const account = privateKeyToAccount(options.walletKey as `0x${string}`);
-  const { fetch: payFetch } = createPaymentFetch(options.walletKey as `0x${string}`);
+  // Create x402 payment-enabled fetch (ampersend or wallet-based)
+  const account = options.ampersendConfig
+    ? { address: options.ampersendConfig.address as `0x${string}` }
+    : privateKeyToAccount(options.walletKey as `0x${string}`);
+  const payFetch = options.ampersendConfig
+    ? options.ampersendConfig.paymentFetch
+    : createPaymentFetch(options.walletKey as `0x${string}`).fetch;
 
   // Create balance monitor for pre-request checks
   const balanceMonitor = new BalanceMonitor(account.address);

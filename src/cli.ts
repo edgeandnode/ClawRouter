@@ -15,6 +15,7 @@
 
 import { startProxy, getProxyPort } from "./proxy.js";
 import { resolveOrGenerateWalletKey } from "./auth.js";
+import { resolveAmpersendConfig } from "./ampersend.js";
 import { BalanceMonitor } from "./balance.js";
 import { VERSION } from "./version.js";
 import { runDoctor } from "./doctor.js";
@@ -58,6 +59,7 @@ Examples:
 
 Environment Variables:
   BLOCKRUN_WALLET_KEY     Private key for x402 payments (auto-generated if not set)
+  AMPERSEND_AGENT_KEY     Ampersend agent key (overrides wallet if set)
   BLOCKRUN_PROXY_PORT     Default proxy port (default: 8402)
 
 For more info: https://github.com/BlockRunAI/ClawRouter
@@ -189,9 +191,18 @@ async function main(): Promise<void> {
     console.log(`[ClawRouter] Using wallet from BLOCKRUN_WALLET_KEY: ${address}`);
   }
 
+  // Resolve ampersend config from env var (optional)
+  const ampersendConfig = process.env.AMPERSEND_AGENT_KEY
+    ? resolveAmpersendConfig({ ampersend_agent_key: process.env.AMPERSEND_AGENT_KEY })
+    : undefined;
+  if (ampersendConfig) {
+    console.log(`[ClawRouter] Using Ampersend smart account: ${ampersendConfig.address}`);
+  }
+
   // Start the proxy
   const proxy = await startProxy({
     walletKey,
+    ampersendConfig,  // optional - if present, overrides wallet-based payments
     port: args.port,
     onReady: (port) => {
       console.log(`[ClawRouter] Proxy listening on http://127.0.0.1:${port}`);
